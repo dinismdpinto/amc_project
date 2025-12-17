@@ -63,7 +63,7 @@ public class Amostra {
 	}
 	
 	
-	// Adiciona um vetor à amostra e atualiza os valores máximos
+	// Adiciona um vetor à amostra e atualiza os valores máximos (add)
 	public void add (int[] v){ 
 		
 		// Se for o primeiro elemento, inicializa os máximos
