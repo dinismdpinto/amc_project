@@ -2,21 +2,48 @@ package projeto_amc;
 
 import java.util.LinkedList;
 
-public class RedeBayes {
+public class Redebayesiana {
 
     Grafosorientados G;
     Amostra T;
-    double S; // Pseudo-contagem (geralmente 0.5)
+    double S; // Parâmetro de suavização (Pseudo-contagem), normalmente 0.5
 
-    /* ================= CONSTRUTOR ================= */
     public RedeBayes(Grafosorientados g, Amostra t, double s) {
         this.G = g;
         this.T = t;
         this.S = s;
     }
 
-    /* ================= MÉTODO PROB ================= */
-    // Calcula a probabilidade de um caso completo (ex: sintomas + diagnóstico)
+    // --- MÉTODO CLASSIFICAR ---
+    // Recebe os dados de um paciente (sem a classe) e descobre a classe mais provável.
+    public int classificar(int[] dadosPaciente) {
+        int indiceClasse = T.dim() - 1;
+        int melhorClasse = -1;
+        double melhorProb = -1.0;
+
+        int numClasses = T.domain(indiceClasse);
+        
+        // Faz uma cópia dos dados para podermos testar diferentes classes
+        int[] casoTeste = dadosPaciente.clone();
+
+        // Para cada classe possível (0, 1, ...):
+        for (int c = 0; c < numClasses; c++) {
+            casoTeste[indiceClasse] = c; // "E se a classe for c?"
+
+            // Calcula a probabilidade conjunta P(Sintomas, Classe=c)
+            double p = prob(casoTeste);
+
+            // Guarda a classe que deu a maior probabilidade
+            if (p > melhorProb) {
+                melhorProb = p;
+                melhorClasse = c;
+            }
+        }
+        return melhorClasse;
+    }
+
+    // Calcula a probabilidade de um evento completo usando a Regra da Cadeia
+    // P(X1...Xn) = Prod P(Xi | Pais(Xi))
     public double prob(int[] evento) {
         double probabilidade = 1.0;
         int n = T.dim(); 
@@ -24,43 +51,17 @@ public class RedeBayes {
         for (int i = 0; i < n; i++) {
             probabilidade *= probabilidadeCondicional(i, evento);
         }
-
         return probabilidade;
     }
 
-    /* ================= MÉTODO CLASSIFICAR (NOVO) ================= */
-    // Recebe um paciente (sintomas) e descobre a classe mais provável (0, 1, etc.)
-    public int classificar(int[] dadosPaciente) {
-        int indiceClasse = T.dim() - 1; // A classe é sempre a última coluna
-        int melhorClasse = -1;
-        double melhorProb = -1.0;
-
-        int dominioClasse = T.domain(indiceClasse); // Quantas classes existem (ex: 2 para cancro)
-
-        // Fazemos uma cópia dos dados para não estragar o original
-        int[] casoTeste = dadosPaciente.clone();
-
-        // Testamos todas as hipóteses: "E se for classe 0?", "E se for classe 1?"...
-        for (int c = 0; c < dominioClasse; c++) {
-            casoTeste[indiceClasse] = c; // Assume a classe 'c'
-            
-            double p = prob(casoTeste); // Vê a probabilidade dessa hipótese
-            
-            if (p > melhorProb) {
-                melhorProb = p;
-                melhorClasse = c;
-            }
-        }
-        return melhorClasse; // Retorna a classe vencedora (ex: 1)
-    }
-
-    /* ================= MÉTODO AUXILIAR ================= */
+    // Calcula P(Xi = x | Pais = p) com Suavização de Laplace/Dirichlet
     private double probabilidadeCondicional(int Xi, int[] evento) {
         LinkedList<Integer> pais = G.parents(Xi);
         
-        int[] vars_cond = new int[pais.size() + 1];
+        // Constrói os arrays para contar as ocorrências nos dados
+        int[] vars_cond = new int[pais.size() + 1]; // Xi + Pais
         int[] vals_cond = new int[pais.size() + 1];
-        int[] vars_pais = new int[pais.size()];
+        int[] vars_pais = new int[pais.size()];     // Apenas Pais
         int[] vals_pais = new int[pais.size()];
 
         for (int k = 0; k < pais.size(); k++) {
@@ -74,10 +75,14 @@ public class RedeBayes {
         vars_cond[pais.size()] = Xi;
         vals_cond[pais.size()] = evento[Xi];
 
-        double N_cond = T.count(vars_cond, vals_cond);
-        double N_pais = (pais.isEmpty()) ? T.length() : T.count(vars_pais, vals_pais);
-        int Di = T.domain(Xi);
+        // Contagens na amostra
+        double N_cond = T.count(vars_cond, vals_cond); // Quantas vezes Xi e Pais aparecem assim
+        double N_pais = (pais.isEmpty()) ? T.length() : T.count(vars_pais, vals_pais); // Quantas vezes os Pais aparecem assim
+        
+        int Di = T.domain(Xi); // Tamanho do domínio de Xi
 
+        // Fórmula da Probabilidade com Suavização 'S'
+        // (N_cond + S) / (N_pais + S * |Dominio|)
         return (N_cond + S) / (N_pais + S * Di);
     }
 }

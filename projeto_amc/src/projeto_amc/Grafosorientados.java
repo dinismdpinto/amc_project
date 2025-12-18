@@ -6,7 +6,7 @@ import java.util.LinkedList;
 public class Grafosorientados {
 
     int n; 
-    ArrayList<LinkedList<Integer>> adj; 
+    ArrayList<LinkedList<Integer>> adj; // Listas de adjacência (quem são os filhos de quem)
 
     public Grafosorientados(int n) {
         this.n = n;
@@ -15,217 +15,224 @@ public class Grafosorientados {
             adj.add(new LinkedList<>());
     }
 
-    /* ================= OPERAÇÕES BÁSICAS ================= */
+    // --- MÉTODOS DE MANIPULAÇÃO DO GRAFO ---
     
+    // Adiciona uma seta u -> v
     public void add_edge(int u, int v) {
-        if (!adj.get(u).contains(v))
-            adj.get(u).add(v);
+        if (!adj.get(u).contains(v)) adj.get(u).add(v);
     }
 
+    // Remove a seta u -> v
     public void remove_edge(int u, int v) {
         adj.get(u).remove((Integer) v);
     }
 
+    // Inverte a seta u -> v para v -> u
     public void invert_edge(int u, int v) {
         remove_edge(u, v);
         add_edge(v, u);
     }
 
+    // Retorna a lista de pais de um nó (quem aponta para 'node')
+    public LinkedList<Integer> parents(int node) {
+        LinkedList<Integer> p = new LinkedList<>();
+        for (int i = 0; i < n; i++)
+            if (adj.get(i).contains(node)) p.add(i);
+        return p;
+    }
+
+    // Verifica se existe caminho de u para v (usado para detetar ciclos)
     public boolean connected(int u, int v) {
         boolean[] visited = new boolean[n];
         return dfsConnected(u, v, visited);
     }
 
+    // Algoritmo de busca em profundidade (DFS) auxiliar
     private boolean dfsConnected(int cur, int target, boolean[] visited) {
         if (cur == target) return true;
         visited[cur] = true;
         for (int nxt : adj.get(cur))
-            if (!visited[nxt] && dfsConnected(nxt, target, visited))
-                return true;
+            if (!visited[nxt] && dfsConnected(nxt, target, visited)) return true;
         return false;
     }
 
-    public LinkedList<Integer> parents(int node) {
-        LinkedList<Integer> p = new LinkedList<>();
-        for (int i = 0; i < n; i++)
-            if (adj.get(i).contains(node))
-                p.add(i);
-        return p;
-    }
+    // --- ALGORITMO GREEDY HILL CLIMBER (APRENDIZAGEM) ---
+    // É aqui que o grafo é construído automaticamente
+    public void aprender(Amostra T) {
+        boolean melhorou = true;
+        int indiceClasse = T.dim() - 1; // A classe é sempre a última coluna
 
-    /* ========================================================== */
-    /* RESPOSTA 2 e 3: CÁLCULO OTIMIZADO DE MDL         */
-    /* ========================================================== */
+        while (melhorou) {
+            melhorou = false;
+            double melhorDelta = 0.0;
+            int op = -1, bestU = -1, bestV = -1; // op: 0=remover, 1=inverter, 2=adicionar
 
-    /**
-     * Calcula o score MDL total da rede.
-     * Implementa a Eq 2.6.3 (Maximização).
-     */
-    public double MDL(Amostra T) {
-        double totalScore = 0.0;
-        
-        // O score total é a soma dos scores locais de cada nó
-        for (int i = 0; i < n; i++) {
-            totalScore += scoreLocal(i, T);
+            // Testa todas as combinações possíveis de pares de nós (u, v)
+            for (int u = 0; u < n; u++) {
+                for (int v = 0; v < n; v++) {
+                    if (u == v) continue; // Não pode haver laços (seta para si mesmo)
+
+                    // REGRA 1: A variável Classe (v) nunca pode ter pais.
+                    // A classe causa os sintomas, não o contrário.
+                    if (v == indiceClasse) continue;
+
+                    boolean existe = parents(v).contains(u);
+
+                    if (!existe) { 
+                        // Tentar ADICIONAR aresta u -> v
+                        
+                        // REGRA 2: Limite máximo de 2 pais por nó (para evitar complexidade excessiva)
+                        // Ignoramos esta restrição se quisermos uma rede complexa, mas para BNC simples ajuda.
+                        if (parents(v).size() >= 2) continue;
+
+                        double d = MDLdelta(T, u, v, 2);
+                        if (d > melhorDelta) { melhorDelta = d; bestU = u; bestV = v; op = 2; }
+                    } else { 
+                        // Tentar REMOVER aresta u -> v
+                        double dRem = MDLdelta(T, u, v, 0);
+                        if (dRem > melhorDelta) { melhorDelta = dRem; bestU = u; bestV = v; op = 0; }
+                        
+                        // Tentar INVERTER aresta u -> v (vira v -> u)
+                        // Se invertermos, 'u' passa a ser o filho. Logo, 'u' não pode ser a Classe.
+                        if (u != indiceClasse) {
+                             double dInv = MDLdelta(T, u, v, 1);
+                             if (dInv > melhorDelta) { melhorDelta = dInv; bestU = u; bestV = v; op = 1; }
+                        }
+                    }
+                }
+            }
+
+            // Se encontrámos uma operação que melhora o score (MDL), aplicamo-la.
+            if (melhorDelta > 0.0001) { // 0.0001 é uma pequena margem para evitar loops infinitos com valores iguais
+                melhorou = true;
+                if (op == 0) remove_edge(bestU, bestV);
+                else if (op == 1) invert_edge(bestU, bestV);
+                else if (op == 2) add_edge(bestU, bestV);
+            }
         }
-        
-        // Nota: A constante global (|Dc|-1) da penalização cancela-se na comparação,
-        // mas se quiseres o valor exato absoluto, podes subtrair aqui.
-        // Para o algoritmo Greedy, a soma dos locais é suficiente.
-        return totalScore;
     }
 
-    /**
-     * Calcula a variação de MDL para uma operação.
-     * Otimização: Calcula apenas a diferença nos nós afetados.
-     * Verificação de Ciclos: Usa connected() localmente.
-     * * @param operacao 0: remover, 1: inverter, 2: adicionar
-     * @return delta (positivo significa melhoria) ou -Infinity se inválido (ciclo)
-     */
+    // --- CÁLCULO DO SCORE MDL ---
+    // Calcula quanto o score muda se aplicarmos uma operação, sem recalcular a rede toda.
     public double MDLdelta(Amostra T, int u, int v, int operacao) {
         double delta = Double.NEGATIVE_INFINITY;
-
-        // Caso 2: ADICIONAR aresta u -> v
-        // Nós afetados: apenas v (mudam os pais de v)
-        if (operacao == 2) {
-            // 1. Verificação de Ciclo: Se já existe caminho v -> ... -> u, adicionar u->v cria ciclo.
+        
+        if (operacao == 2) { // Adicionar u -> v
+            // Se criar ciclo, é proibido (-Infinito)
             if (connected(v, u)) return Double.NEGATIVE_INFINITY; 
-
-            double scoreAntes = scoreLocal(v, T);
             
-            add_edge(u, v); // Aplica
-            double scoreDepois = scoreLocal(v, T);
+            double sAntes = scoreLocal(v, T);
+            add_edge(u, v); // Simula adição
+            double sDepois = scoreLocal(v, T);
             remove_edge(u, v); // Desfaz
             
-            delta = scoreDepois - scoreAntes;
-        }
-        
-        // Caso 0: REMOVER aresta u -> v
-        // Nós afetados: apenas v
-        else if (operacao == 0) {
-            // Remover arestas nunca cria ciclos, não precisa verificar.
-            double scoreAntes = scoreLocal(v, T);
-            
-            remove_edge(u, v); // Aplica
-            double scoreDepois = scoreLocal(v, T);
+            delta = sDepois - sAntes;
+        } 
+        else if (operacao == 0) { // Remover u -> v
+            double sAntes = scoreLocal(v, T);
+            remove_edge(u, v); // Simula remoção
+            double sDepois = scoreLocal(v, T);
             add_edge(u, v); // Desfaz
             
-            delta = scoreDepois - scoreAntes;
-        }
-        
-        // Caso 1: INVERTER aresta u -> v para v -> u
-        // Nós afetados: u e v (ambos mudam de pais)
-        else if (operacao == 1) {
-            // 1. Verificar Ciclo:
-            // Para inverter u->v, primeiro removemos u->v.
-            // Depois verificamos se adicionar v->u cria ciclo (ou seja, se existe caminho u->...->v).
+            delta = sDepois - sAntes;
+        } 
+        else if (operacao == 1) { // Inverter u -> v
             remove_edge(u, v);
-            boolean criaCiclo = connected(u, v);
-            add_edge(u, v); // Repor para calcular o score "Antes"
-            
-            if (criaCiclo) return Double.NEGATIVE_INFINITY;
+            // Verifica se a nova aresta v->u criaria ciclo
+            if (connected(u, v)) { add_edge(u, v); return Double.NEGATIVE_INFINITY; }
+            add_edge(u, v); // Repor para calcular score inicial
 
-            double scoreAntes = scoreLocal(u, T) + scoreLocal(v, T);
+            double sAntes = scoreLocal(u, T) + scoreLocal(v, T);
+            invert_edge(u, v); // Simula inversão
+            double sDepois = scoreLocal(u, T) + scoreLocal(v, T);
+            invert_edge(v, u); // Desfaz
             
-            invert_edge(u, v); // Aplica
-            double scoreDepois = scoreLocal(u, T) + scoreLocal(v, T);
-            invert_edge(v, u); // Desfaz (inverte de volta)
-            
-            delta = scoreDepois - scoreAntes;
+            delta = sDepois - sAntes;
         }
-
         return delta;
     }
 
-    /**
-     * Método Auxiliar: Calcula o score MDL de UM único nó (Xi).
-     * Score_i = m * I(Xi; Pais) - Penalização_i
-     */
+    // Calcula o score MDL de um único nó Xi
     private double scoreLocal(int Xi, Amostra T) {
         int m = T.length();
         
-        // 1. Informação Mútua Condicional (Log-Likelihood Term)
-        double imc = informacaoMutuaCondicional(T, Xi); // Método já existente (ajustar se necessário)
-        double logLikelihood = m * imc;
+        // 1. Log-Likelihood (Precisão): m * Informação Mútua Condicional
+        double logLikelihood = m * informacaoMutuaCondicional(T, Xi);
 
-        // 2. Penalização (Complexity Term) [cite: 183]
-        // |Theta_i| = (Dim(Xi) - 1) * q_i * Dim(C)
-        // Onde q_i é o produto das dimensões dos pais
+        // 2. Penalização (Complexidade): (log2(m) / 2) * número de parâmetros
+        int C = T.dim() - 1; 
+        int dimXi = T.domain(Xi); // Quantos valores Xi pode assumir
+        int dimC = T.domain(C);   // Quantas classes existem
         
-        int C = T.dim() - 1; // Índice da classe
-        int dimXi = T.domain(Xi);
-        int dimC = T.domain(C);
-        
+        // q_i é o produto dos domínios dos pais
         int qi = 1;
-        for (int pai : parents(Xi)) {
-            qi *= T.domain(pai);
-        }
+        for (int pai : parents(Xi)) qi *= T.domain(pai);
         
-        int paramsLocais = (dimXi - 1) * qi * dimC;
+        // Fórmula de parâmetros para BNC: (r_i - 1) * q_i * |C|
+        // Referência: Friedman et al. (1997) ou conforme apontamentos
+        int params = (dimXi - 1) * qi * dimC;
         
-        // Penalização = (log2(m) / 2) * |Theta_i|
-        double penalizacao = (Math.log(m) / Math.log(2)) * paramsLocais / 2.0;
+        // ATENÇÃO AOS LOGARITMOS: Penalização usa Log base 2
+        double log2m = Math.log(m) / Math.log(2); 
+        double penalizacao = (log2m / 2.0) * params;
 
-        // MDL Score (para maximizar) = LL - Penalização
         return logLikelihood - penalizacao;
     }
 
-    /* ================= MÉTODOS DE CÁLCULO (IMC) ================= */
-    // Mantém a tua lógica de percorrimento recursivo, apenas certifica-te 
-    // que informacaoMutuaCondicional chama o helper corretamente.
-
+    // --- CÁLCULO DA INFORMAÇÃO MÚTUA CONDICIONAL (IMC) ---
     private double informacaoMutuaCondicional(Amostra T, int Xi) {
         int C = T.dim() - 1;              
         LinkedList<Integer> pais = parents(Xi);
         int m = T.length();
 
-        // Constrói vetor: [Pais..., Xi, C]
+        // O IMC no BNC calcula a dependência entre Xi, os seus Pais, e a Classe C.
+        // Array de variáveis: [Pais..., Xi, C]
         int[] vars = new int[pais.size() + 2];
-        for (int i = 0; i < pais.size(); i++)
-            vars[i] = pais.get(i);
+        for (int i = 0; i < pais.size(); i++) vars[i] = pais.get(i);
+        vars[pais.size()] = Xi;
+        vars[pais.size() + 1] = C; 
 
-        vars[pais.size()]     = Xi;
-        vars[pais.size() + 1] = C;
-
-        int[] vals = new int[vars.length];
-
-        return percorreIMC(T, vars, vals, 0, m);
+        return percorreIMC(T, vars, new int[vars.length], 0, m);
     }
 
-    // Este método mantém-se igual ao que enviaste, pois a lógica recursiva está correta.
+    // Função recursiva para somar sobre todos os valores possíveis das variáveis
     private double percorreIMC(Amostra T, int[] vars, int[] vals, int idx, int m) {
         if (idx == vars.length) {
+            // Contagem conjunta N(x, parent(x), c)
             double n_xyz = T.count(vars, vals);
             if (n_xyz == 0) return 0.0;
 
-            int Xi = vars[vars.length - 2];
-            int C  = vars[vars.length - 1];
-
-            // Subconjuntos para calcular P(Xi, C) e P(Pais, C)
-            int[] vars_xc = { Xi, C };
+            // Variáveis para os termos do denominador
+            // vars_xc: Xi e C
+            int[] vars_xc = { vars[vars.length - 2], vars[vars.length - 1] }; 
             int[] vals_xc = { vals[vars.length - 2], vals[vars.length - 1] };
-
+            
+            // vars_wc: Pais e C
             int[] vars_wc = new int[vars.length - 1];
             int[] vals_wc = new int[vals.length - 1];
-            System.arraycopy(vars, 0, vars_wc, 0, vars.length - 1);
+            System.arraycopy(vars, 0, vars_wc, 0, vars.length - 1); 
             System.arraycopy(vals, 0, vals_wc, 0, vals.length - 1);
 
             double n_xc = T.count(vars_xc, vals_xc);
             double n_wc = T.count(vars_wc, vals_wc);
+            
+            // vars_c: C apenas
+            int C = vars[vars.length - 1];
+            double n_c = T.count(C, vals[vars.length - 1]);
 
-            // Probabilidades empíricas
+            // Probabilidades
             double P_xyz = n_xyz / m;
             double P_xc  = n_xc  / m;
             double P_wc  = n_wc  / m;
-            double P_c   = (double)T.count(C, vals[vars.length-1]) / m;
+            double P_c   = n_c   / m;
 
-            // Fórmula IMC: P(x,w,c) * log( (P(x,w,c)*P(c)) / (P(x,c)*P(w,c)) ) [cite: 137]
-            // Nota: P(c) está no numerador dentro do logaritmo
+            // ATENÇÃO AOS LOGARITMOS: IMC usa Log Natural (Math.log)
+            // Fórmula: P(xyz) * log [ (P(xyz) * P(c)) / (P(xc) * P(wc)) ]
             return P_xyz * Math.log((P_xyz * P_c) / (P_xc * P_wc));
         }
 
         double sum = 0.0;
-        // v percorre o domínio da variável vars[idx]
+        // Percorre todos os valores possíveis para a variável atual
         for (int v = 0; v < T.domain(vars[idx]); v++) {
             vals[idx] = v;
             sum += percorreIMC(T, vars, vals, idx + 1, m);
