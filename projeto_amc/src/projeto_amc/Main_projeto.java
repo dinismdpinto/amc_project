@@ -85,9 +85,9 @@ public class Main_projeto {
         System.out.println("Previsão:  " + textoPrev + " (" + previsao + ")");
         
         if (classeReal == previsao) {
-            System.out.println("Resultado: SUCESSO! A rede acertou. ✅");
+            System.out.println("Resultado: A rede acertou.");
         } else {
-            System.out.println("Resultado: FALHA. A rede errou. ❌");
+            System.out.println("Resultado: A rede errou.");
         }
     }
 }
