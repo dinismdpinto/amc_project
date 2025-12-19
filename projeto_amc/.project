@@ -16,6 +16,41 @@
 	</natures>
 	<linkedResources>
 		<link>
+			<name>dataset/bcancer.csv</name>
+			<type>1</type>
+			<location>/Users/dinismariapinto/Downloads/bcancer.csv</location>
+		</link>
+		<link>
+			<name>dataset/diabetes.csv</name>
+			<type>1</type>
+			<location>/Users/dinismariapinto/Downloads/diabetes.csv</location>
+		</link>
+		<link>
+			<name>dataset/hepatitis.csv</name>
+			<type>1</type>
+			<location>/Users/dinismariapinto/Downloads/hepatitis.csv</location>
+		</link>
+		<link>
+			<name>dataset/letter.csv</name>
+			<type>1</type>
+			<location>/Users/dinismariapinto/Downloads/letter.csv</location>
+		</link>
+		<link>
+			<name>dataset/satimage.csv</name>
+			<type>1</type>
+			<location>/Users/dinismariapinto/Downloads/satimage.csv</location>
+		</link>
+		<link>
+			<name>dataset/soybean-large.csv</name>
+			<type>1</type>
+			<location>/Users/dinismariapinto/Downloads/soybean-large.csv</location>
+		</link>
+		<link>
+			<name>dataset/thyroid.csv</name>
+			<type>1</type>
+			<location>/Users/dinismariapinto/Downloads/thyroid.csv</location>
+		</link>
+		<link>
 			<name>src/projeto_amc/bcancer.csv</name>
 			<type>1</type>
 			<location>/Users/dinismariapinto/Downloads/bcancer.csv</location>
