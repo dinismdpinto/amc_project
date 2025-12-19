@@ -13,7 +13,6 @@ public class Amostra {
     // Lista que guarda os dados (matriz m x n)
     ArrayList<int[]> lista;  
     
-    // MUDANÇA 1: Mudei para 'protected' para facilitar acesso, mas mantive a lógica.
     // Vetor auxiliar para guardar o valor máximo encontrado em cada variável (define o domínio).
     protected int[] maximos = null;  
 
@@ -29,8 +28,6 @@ public class Amostra {
         Amostra nova = new Amostra();
         
         // Copia os domínios (maximos) da amostra original para a nova.
-        // Isto é crucial: a nova amostra tem de saber que a variável X vai até ao valor 5, 
-        // mesmo que nesta sub-amostra o 5 não apareça.
         if (this.maximos != null) {
             nova.maximos = this.maximos.clone();
         }
@@ -52,7 +49,6 @@ public class Amostra {
         
         int[] stringToIntVec = new int[strings.length]; 
         for (int i = 0; i < strings.length; i++) {
-            // MUDANÇA 2: Adicionei .trim() para limpar espaços em branco que dão erro (ex: " 1")
             stringToIntVec[i] = Integer.parseInt(strings[i].trim()); 
         }
         return stringToIntVec;
@@ -207,23 +203,26 @@ public class Amostra {
     
     @Override
     public String toString() {
-        String s="\n[\n";
-        if (lista.size()>0) s+=Arrays.toString(lista.get(0));
-        // Limitei a impressão para não encher a consola se o ficheiro for gigante
-        int limite = Math.min(lista.size(), 10); 
-        for (int i=1; i<limite;i++)
-            s+="\n"+Arrays.toString(lista.get(i));
-        if (lista.size() > limite) s += "\n... (restantes ocultos)";
-        s+="\n]";
+        // --- ALTERAÇÃO AQUI: REMOVIDA A LIMITAÇÃO DAS 10 LINHAS ---
+        String s = "\n[\n";
         
-        int [] mydomain = new int[maximos.length];
-        for (int i=0; i<maximos.length;i++)
-            mydomain[i]=maximos[i]+1;
+        // Agora percorre a lista inteira até ao fim (lista.size())
+        if (lista.size() > 0) {
+            s += Arrays.toString(lista.get(0));
+        }
+        for (int i = 1; i < lista.size(); i++) {
+            s += "\n" + Arrays.toString(lista.get(i));
+        }
+        s += "\n]";
+        
+        int[] mydomain = new int[maximos.length];
+        for (int i = 0; i < maximos.length; i++) {
+            mydomain[i] = maximos[i] + 1;
+        }
             
-        return "Domínios (Tamanhos): \n" + Arrays.toString(mydomain)+"\n"+"Amostra (Primeiras linhas): " + s;
+        return "Domínios (Tamanhos): \n" + Arrays.toString(mydomain) + "\n" + "Amostra (Completa): " + s;
     }
 
-    // O Main de teste pode ficar igual
     public static void main(String[] args) {
         Amostra amostra = new Amostra("bcancer.csv");
         System.out.println(amostra);
