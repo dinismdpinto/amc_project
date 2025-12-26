@@ -20,7 +20,9 @@ public class Redebayesiana {
     public int classificar(int[] dadosPaciente) {
         int indiceClasse = T.dim() - 1;
         int melhorClasse = -1;
-        double melhorProb = -1.0;
+
+        // MUDANÇA 1: Inicializar com -Infinito porque Log de probabilidade é sempre negativo
+        double melhorLogProb = Double.NEGATIVE_INFINITY;
 
         int numClasses = T.domain(indiceClasse);
 
@@ -30,11 +32,12 @@ public class Redebayesiana {
         for (int c = 0; c < numClasses; c++) {
             casoTeste[indiceClasse] = c;
 
-            // P(Sintomas, Classe = c)
-            double p = prob(casoTeste);
+            // Calcula Log-Probabilidade
+            double logP = probLog(casoTeste);
 
-            if (p > melhorProb) {
-                melhorProb = p;
+            // Comparação mantém-se igual (quem tiver maior log, tem maior probabilidade)
+            if (logP > melhorLogProb) {
+                melhorLogProb = logP;
                 melhorClasse = c;
             }
         }
@@ -43,14 +46,17 @@ public class Redebayesiana {
 
     // Calcula a probabilidade conjunta P(X1, ..., Xn)
     // P(X1...Xn) = ∏ P(Xi | Pais(Xi))
-    public double prob(int[] evento) {
-        double probabilidade = 1.0;
+    // MUDANÇA 2: Método agora soma Logaritmos em vez de multiplicar probabilidades
+    public double probLog(int[] evento) {
+        double logProbabilidade = 0.0; // Soma começa em 0 (Produto começava em 1)
         int n = T.dim();
 
         for (int i = 0; i < n; i++) {
-            probabilidade *= probabilidadeCondicional(i, evento);
+            double p = probabilidadeCondicional(i, evento);
+            // Math.log(0) dá -Infinito, o que é correto (probabilidade impossível)
+            logProbabilidade += Math.log(p);
         }
-        return probabilidade;
+        return logProbabilidade;
     }
 
     // Calcula P(Xi = xi | Pais(Xi)) com suavização de Laplace/Dirichlet

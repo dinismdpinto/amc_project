@@ -51,7 +51,7 @@ public class Grafosorientados {
     }
 
     // --- ALGORITMO DE APRENDIZAGEM (HILL CLIMBING) ---
-
+    // Complexidade O(N^2*M*D^k), N colunas, M linhas, D tamanho_domínio, k máx_pais 
     // Sobrecarga: Se não especificar k, usa 2 por defeito
     public void aprender(Amostra T) {
         aprender(T, 2);

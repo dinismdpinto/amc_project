@@ -1,186 +1,169 @@
 package projeto_amc;
 
-import java.util.Arrays;
 import java.util.Scanner;
 
 public class Main_projeto {
 
     public static void main(String[] args) {
-        Scanner input = new Scanner(System.in);
+        Scanner scanner = new Scanner(System.in);
+        
+        // ================= CONFIGURAÇÃO AUTOMÁTICA =================
+        // Se Linhas * Colunas > h, usamos K-Fold. Senão, usamos LOO.
+        long H_COMPLEXIDADE = 50000; 
+        
+        // Número de Folds padrão (KOHAVI, Ron (1995) "A Study of Cross-Validation and Bootstrap 
+        //for Accuracy Estimation and Model Selection")
+        int K_FOLD_VALUE = 10; 
+        // ===========================================================
 
-        // ================= SELEÇÃO DO DATASET =================
-        String[] ficheirosDisponiveis = {
-            "bcancer.csv",
-            "diabetes.csv",
-            "hepatitis.csv",
-            "letter.csv",
-            "satimage.csv",
-            "soybean-large.csv",
-            "thyroid.csv"
+        String[] ficheiros = {
+            "bcancer.csv", "diabetes.csv", "hepatitis.csv", 
+            "thyroid.csv", "soybean-large.csv", "satimage.csv", "letter.csv"
         };
 
-        System.out.println("============================================");
-        System.out.println("      ESCOLHA O DATASET PARA ANÁLISE");
-        System.out.println("============================================");
-        
-        for (int i = 0; i < ficheirosDisponiveis.length; i++) {
-            System.out.println("[" + (i + 1) + "] " + ficheirosDisponiveis[i]);
+        System.out.println("=== CLASSIFICADOR AUTOMÁTICO ===");
+        System.out.println("Escolha o dataset:");
+        for (int i = 0; i < ficheiros.length; i++) {
+            System.out.println("[" + (i + 1) + "] " + ficheiros[i]);
         }
 
-        String ficheiro = "";
-        while (true) {
-            System.out.print("\nEscolha uma opção (1-" + ficheirosDisponiveis.length + "): ");
-            if (input.hasNextInt()) {
-                int escolha = input.nextInt();
-                if (escolha >= 1 && escolha <= ficheirosDisponiveis.length) {
-                    ficheiro = ficheirosDisponiveis[escolha - 1];
-                    break;
-                }
-            } else {
-                input.next(); // Limpar buffer de entrada inválida
-            }
-            System.out.println("Opção inválida. Tente novamente.");
-        }
-
-        System.out.println("\n>>> A carregar dados de: " + ficheiro);
-        Amostra amostraCompleta = new Amostra(ficheiro);
-
-        // Verificação de segurança
-        if (amostraCompleta.length() == 0) {
-            System.err.println("Erro: Ficheiro vazio ou não encontrado!");
-            input.close();
+        int escolha;
+        try {
+            System.out.print("Opção: ");
+            escolha = scanner.nextInt() - 1;
+        } catch (Exception e) {
+            scanner.close();
             return;
         }
 
-        System.out.println("Dados carregados com sucesso.");
-        System.out.println("Total de casos na base de dados: " + amostraCompleta.length());
-        int numVariaveis = amostraCompleta.dim();
-        System.out.println("Número de variáveis: " + numVariaveis);
-
-        // ================= PARTE 1: VALIDAÇÃO LEAVE-ONE-OUT =================
-        System.out.println("\n=== INICIANDO VALIDAÇÃO LEAVE-ONE-OUT ===");
-        System.out.println("Modo: Otimizado (Cache HashMap ativo na classe Amostra)");
-        System.out.println("Aviso: Datasets grandes podem demorar algum tempo...");
-        
-        long inicio = System.currentTimeMillis();
-        int acertos = 0;
-        int total = amostraCompleta.length();
-
-        for (int i = 0; i < total; i++) {
-            Amostra treino = amostraCompleta.amostraSem(i);
-            int[] teste = amostraCompleta.element(i);
-            int classeReal = teste[teste.length - 1];
-
-            // Aprender estrutura
-            Grafosorientados grafo = new Grafosorientados(treino.dim());
-            grafo.aprender(treino); 
-
-            // Classificar
-            Redebayesiana classificador = new Redebayesiana(grafo, treino, 0.5);
-
-            int[] testeSemClasse = teste.clone();
-            testeSemClasse[testeSemClasse.length - 1] = 0; 
-
-            int previsao = classificador.classificar(testeSemClasse);
-
-            if (previsao == classeReal) {
-                acertos++;
-            }
-
-            // Feedback visual para o utilizador não pensar que o programa encravou
-            if (i % 10 == 0) System.out.print(".");
-            if (i % 100 == 0 && i > 0) System.out.println(" (" + i + " processados)");
+        if (escolha < 0 || escolha >= ficheiros.length) {
+            scanner.close();
+            return;
         }
 
-        long fim = System.currentTimeMillis();
+        String ficheiro = ficheiros[escolha];
 
-        System.out.println("\n\n=== RELATÓRIO FINAL ===");
-        System.out.println("Ficheiro analisado: " + ficheiro);
-        System.out.println("Total de Casos Testados: " + total);
-        System.out.println("Total de Acertos: " + acertos);
-        double accuracy = (double) acertos / total * 100;
-        System.out.printf("PRECISÃO (Accuracy): %.2f%%\n", accuracy);
-        System.out.println("Tempo de execução: " + (fim - inicio) / 1000 + " segundos.");
+        // 1. CARREGAR AMOSTRA
+        System.out.println("\n>>> A carregar " + ficheiro + "...");
+        Amostra amostra = new Amostra(ficheiro);
+        if (amostra.length() == 0) {
+            scanner.close();
+            return;
+        }
 
-        // ================= PARTE 2: VERIFICAR CASO EXISTENTE =================
-        System.out.println("\n============================================");
-        System.out.println("   CONSULTAR DIAGNÓSTICO DE PACIENTE EXISTENTE");
-        System.out.println("============================================");
+        // 2. CÁLCULO DA COMPLEXIDADE
+        long complexidade = (long) amostra.length() * amostra.dim();
+        System.out.println("Dimensões: " + amostra.length() + " casos x " + amostra.dim() + " variáveis.");
+        System.out.println("Complexidade (N*M): " + complexidade);
 
-        Grafosorientados grafoFinal = null;
-        Redebayesiana classificadorFinal = null;
-        boolean modeloTreinado = false;
+        // 3. DEFINIR LIMITE DE PAIS (k)
+        // Para datasets muito complexos (letter/satimage), forçamos k=1 (TAN) para não bloquear.
+        // Para os outros, tentamos k=2.
+        int kPais = (complexidade > 100000) ? 1 : 2;
+        System.out.println("Grau de pais escolhido: k=" + kPais +
+                (kPais == 1 ? " (TAN - Rápido)" : " (K-DB - Preciso)"));
 
-        while (true) {
-            System.out.print("\nDeseja verificar um caso específico? (S/N): ");
-            String resposta = input.next();
+        // 4. DECISÃO DA ESTRATÉGIA DE TESTE
+        if (complexidade < H_COMPLEXIDADE) {
+            System.out.println("\n[DECISÃO] Dataset Leve -> A aplicar LEAVE-ONE-OUT...");
+            executarLeaveOneOut(amostra, kPais);
+        } else {
+            System.out.println("\n[DECISÃO] Dataset Pesado -> A aplicar " + K_FOLD_VALUE + "-FOLD CROSS VALIDATION...");
+            executarKFold(amostra, kPais, K_FOLD_VALUE);
+        }
 
-            if (resposta.equalsIgnoreCase("N")) {
-                System.out.println("A encerrar o programa. Adeus!");
-                break;
-            } else if (!resposta.equalsIgnoreCase("S")) {
-                System.out.println("Opção inválida.");
-                continue;
+        scanner.close();
+    }
+
+    // -------------------------------------------------------------------------
+    // ESTRATÉGIA 1: K-FOLD CROSS VALIDATION (RÁPIDO)
+    // -------------------------------------------------------------------------
+    public static void executarKFold(Amostra amostra, int kPais, int numFolds) {
+        long inicio = System.currentTimeMillis();
+        int totalAcertos = 0;
+        int totalTestados = 0;
+        int tamanhoFold = amostra.length() / numFolds;
+
+        for (int fold = 0; fold < numFolds; fold++) {
+            System.out.print("Fold " + (fold + 1) + "/" + numFolds + "... ");
+
+            int inicioTeste = fold * tamanhoFold;
+            int fimTeste = (fold == numFolds - 1) ? amostra.length() : inicioTeste + tamanhoFold;
+
+            // Criar Treino (Copia tudo MENOS a fatia de teste)
+            Amostra treino = new Amostra();
+            // (Truque para copiar metadados do domínio)
+            if (amostra.length() > 0) {
+                treino.add(amostra.element(0));
+                treino = treino.amostraSem(0);
             }
 
-            // 1. Treinar o modelo final (uma única vez com TODOS os dados)
-            if (!modeloTreinado) {
-                System.out.println(">> A treinar o modelo final com a base de dados completa (" + ficheiro + ")...");
-                grafoFinal = new Grafosorientados(numVariaveis);
-                grafoFinal.aprender(amostraCompleta); 
-                classificadorFinal = new Redebayesiana(grafoFinal, amostraCompleta, 0.5);
-                modeloTreinado = true;
-                System.out.println(">> Modelo pronto!");
-            }
-
-            // 2. Pedir o índice do paciente
-            int maxIndice = total - 1;
-            int indiceEscolhido = -1;
-            
-            while (true) {
-                try {
-                    System.out.print("Insira o ID do Paciente (0 a " + maxIndice + "): ");
-                    if (input.hasNextInt()) {
-                        indiceEscolhido = input.nextInt();
-                        if (indiceEscolhido >= 0 && indiceEscolhido <= maxIndice) {
-                            break;
-                        } else {
-                            System.out.println("Erro: Índice fora dos limites.");
-                        }
-                    } else {
-                        System.out.println("Erro: Insira um número inteiro.");
-                        input.next();
-                    }
-                } catch (Exception e) {
-                    System.out.println("Erro inesperado na leitura.");
-                    input.next(); 
+            for (int i = 0; i < amostra.length(); i++) {
+                if (i < inicioTeste || i >= fimTeste) {
+                    treino.add(amostra.element(i));
                 }
             }
 
-            // 3. Obter os dados reais
-            int[] dadosReais = amostraCompleta.element(indiceEscolhido);
-            int classeReal = dadosReais[dadosReais.length - 1];
-            
-            // 4. Preparar para teste (esconder a classe)
-            int[] dadosParaTeste = dadosReais.clone();
-            dadosParaTeste[dadosParaTeste.length - 1] = 0; // Mascara a classe
+            // Aprender
+            Grafosorientados grafo = new Grafosorientados(treino.dim());
+            grafo.aprender(treino, kPais);
 
-            // 5. Classificar
-            int previsao = classificadorFinal.classificar(dadosParaTeste);
-            
-            // 6. Mostrar resultados
-            System.out.println("\n--- ANÁLISE DO PACIENTE #" + indiceEscolhido + " (" + ficheiro + ") ---");
-            System.out.println("Dados completos: " + Arrays.toString(dadosReais));
-            System.out.println("Diagnóstico Real (Ficheiro): " + classeReal);
-            System.out.println("Diagnóstico Previsto (IA):   " + previsao);
-            
-            if (classeReal == previsao) {
-                System.out.println("RESULTADO: SUCESSO (A previsão está correta!)");
-            } else {
-                System.out.println("RESULTADO: ERRO (A previsão falhou.)");
+            // Classificar
+            Redebayesiana rede = new Redebayesiana(grafo, treino, 0.5);
+            int acertosFold = 0;
+            int countFold = 0;
+
+            for (int i = inicioTeste; i < fimTeste; i++) {
+                int[] casoTeste = amostra.element(i);
+                int real = casoTeste[casoTeste.length - 1];
+
+                int previsao = rede.classificar(casoTeste);
+                if (previsao == real) acertosFold++;
+                countFold++;
             }
+
+            totalAcertos += acertosFold;
+            totalTestados += countFold;
+            System.out.println("Acertos: " + acertosFold + "/" + countFold);
         }
-        
-        input.close();
+
+        mostrarResultados(totalAcertos, totalTestados, inicio);
+    }
+
+    // -------------------------------------------------------------------------
+    // ESTRATÉGIA 2: LEAVE-ONE-OUT (EXAUSTIVO)
+    // -------------------------------------------------------------------------
+    public static void executarLeaveOneOut(Amostra amostra, int kPais) {
+        long inicio = System.currentTimeMillis();
+        int acertos = 0;
+        int total = amostra.length();
+
+        for (int i = 0; i < total; i++) {
+            Amostra treino = amostra.amostraSem(i);
+            int[] teste = amostra.element(i);
+            int real = teste[teste.length - 1];
+
+            Grafosorientados grafo = new Grafosorientados(treino.dim());
+            grafo.aprender(treino, kPais);
+
+            Redebayesiana rede = new Redebayesiana(grafo, treino, 0.5);
+            int previsao = rede.classificar(teste);
+
+            if (previsao == real) acertos++;
+
+            // Feedback visual a cada 5% de progresso
+            if (i % Math.max(1, total / 20) == 0) System.out.print(".");
+        }
+
+        mostrarResultados(acertos, total, inicio);
+    }
+
+    private static void mostrarResultados(int acertos, int total, long inicio) {
+        System.out.println("\n=== RESULTADOS FINAIS ===");
+        System.out.println("Total Testado: " + total);
+        System.out.println("Acertos: " + acertos);
+        System.out.printf("PRECISÃO (Accuracy): %.2f%%\n", (double) acertos / total * 100);
+        System.out.println("Tempo Total: " +
+                (System.currentTimeMillis() - inicio) / 1000 + "s");
     }
 }
