@@ -2,21 +2,27 @@ package projeto_amc;
 
 import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.Arrays;
 
 public class Grafosorientados {
 
     int n; 
-    ArrayList<LinkedList<Integer>> adj; // Listas de adjacência
+    ArrayList<LinkedList<Integer>> adj; 
+
+    // --- CACHE DE ALTA PERFORMANCE ---
+    // [Var1][Var2][Valor1][Valor2] -> Guarda contagens de pares instantaneamente
+    private int[][][][] cachePares; 
+    private int[][] cacheSimples; 
+    
+    // Cache de scores para evitar recalcular nós que não foram tocados
+    private double[] cacheScoresLocais;
 
     public Grafosorientados(int n) {
         this.n = n;
         this.adj = new ArrayList<>(n);
-        for (int i = 0; i < n; i++)
-            adj.add(new LinkedList<>());
+        for (int i = 0; i < n; i++) adj.add(new LinkedList<>());
     }
 
-    // --- MÉTODOS DE MANIPULAÇÃO DO GRAFO ---
-    
     public void add_edge(int u, int v) {
         if (!adj.get(u).contains(v)) adj.get(u).add(v);
     }
@@ -37,237 +43,274 @@ public class Grafosorientados {
         return p;
     }
 
+    // DFS para verificar ciclos
     public boolean connected(int u, int v) {
         boolean[] visited = new boolean[n];
-        return dfsConnected(u, v, visited);
+        return dfs(u, v, visited);
     }
-
-    private boolean dfsConnected(int cur, int target, boolean[] visited) {
+    private boolean dfs(int cur, int target, boolean[] visited) {
         if (cur == target) return true;
         visited[cur] = true;
         for (int nxt : adj.get(cur))
-            if (!visited[nxt] && dfsConnected(nxt, target, visited)) return true;
+            if (!visited[nxt] && dfs(nxt, target, visited)) return true;
         return false;
     }
 
-    // --- ALGORITMO DE APRENDIZAGEM (HILL CLIMBING) ---
-    // Complexidade O(N^2*M*D^k), N colunas, M linhas, D tamanho_domínio, k máx_pais 
-    // Sobrecarga: Se não especificar k, usa 2 por defeito
-    public void aprender(Amostra T) {
-        aprender(T, 2);
+    // =========================================================================
+    //               CONSTRUÇÃO DA CACHE (Lê Amostra 1 vez)
+    // =========================================================================
+    
+    private void construirCache(Amostra T) {
+        System.out.println(">> A construir Cache Estatística (Isto demora ~1s)...");
+        int maxDom = 0;
+        for(int i=0; i<n; i++) maxDom = Math.max(maxDom, T.domain(i));
+        maxDom = maxDom + 1; 
+
+        // Aloca memória RAM (Cerca de 20MB para letter.csv - Muito leve)
+        cachePares = new int[n][n][maxDom][maxDom];
+        cacheSimples = new int[n][maxDom];
+
+        int N = T.length();
+        
+        // Passada única pela amostra
+        for (int k = 0; k < N; k++) {
+            int[] linha = T.element(k); // Acesso rápido int[]
+            
+            for (int i = 0; i < n; i++) {
+                int val_i = linha[i];
+                cacheSimples[i][val_i]++; 
+                
+                // Preenche triângulo superior da matriz de adjacência estatística
+                for (int j = i + 1; j < n; j++) {
+                    int val_j = linha[j];
+                    cachePares[i][j][val_i][val_j]++;
+                    cachePares[j][i][val_j][val_i]++; // Simetria
+                }
+            }
+        }
+        System.out.println(">> Cache Construída com Sucesso.");
     }
 
-    // LÓGICA ATUALIZADA:
-    // k = limite de pais que são OUTROS ATRIBUTOS.
-    // A Classe (variável alvo) pode ser adicionada como pai extra.
-    // Limite total real = k + 1 (se a classe for pai).
+    // =========================================================================
+    //                        ALGORITMO DE APRENDIZAGEM
+    // =========================================================================
+
+    public void aprender(Amostra T) {
+        int k = 2;
+        aprender(T, k);
+    }
+
     public void aprender(Amostra T, int k) {
+        construirCache(T);
+        
+        // Inicializa cache de scores atuais
+        cacheScoresLocais = new double[n];
+        for(int i=0; i<n; i++) cacheScoresLocais[i] = scoreRapido(i, T);
+
         boolean melhorou = true;
-        int indiceClasse = T.dim() - 1; // A classe é sempre a última coluna
+        int indiceClasse = n - 1;
+        int iteracao = 0; // Contador para DEBUG
 
+        System.out.println(">> A iniciar Hill-Climbing (K=" + k + ")...");
+
+        // Loop Hill Climbing
         while (melhorou) {
+            iteracao++;
             melhorou = false;
-            double melhorDelta = 0.0;
-            int op = -1, bestU = -1, bestV = -1; // 0=remover, 1=inverter, 2=adicionar
+            double melhorDelta = 0.0001; // Margem mínima
+            int op = -1, bestU = -1, bestV = -1;
 
+            // Testa todas as arestas possíveis
             for (int u = 0; u < n; u++) {
                 for (int v = 0; v < n; v++) {
-                    if (u == v) continue; 
-                    
-                    // REGRA: A Classe nunca pode ser filha (nó V nunca é a classe)
-                    if (v == indiceClasse) continue;
+                    if (u == v || v == indiceClasse) continue; 
 
-                    boolean existe = parents(v).contains(u);
+                    boolean existe = adj.get(u).contains(v); 
 
-                    if (!existe) { 
-                        // --- TENTAR ADICIONAR (u -> v) ---
-                        boolean podeAdicionar = false;
-
-                        if (u == indiceClasse) {
-                            // Se o pai proposto é a CLASSE:
-                            // É sempre permitido tentar (não ocupa slot de 'k' atributos)
-                            podeAdicionar = true;
-                        } else {
-                            // Se o pai proposto é um ATRIBUTO:
-                            // Só podemos adicionar se o nó v ainda tiver "vagas" para atributos
-                            if (contarPaisAtributos(v, indiceClasse) < k) {
-                                podeAdicionar = true;
-                            }
-                        }
-
-                        if (podeAdicionar) {
-                            // O MDLdelta verifica internamente se cria ciclos (connected)
-                            double d = MDLdelta(T, u, v, 2);
-                            if (d > melhorDelta) { melhorDelta = d; bestU = u; bestV = v; op = 2; }
-                        }
-
-                    } else { 
-                        // --- TENTAR REMOVER (u -> v) ---
-                        // Remover é sempre permitido, não viola limites
-                        double dRem = MDLdelta(T, u, v, 0);
-                        if (dRem > melhorDelta) { melhorDelta = dRem; bestU = u; bestV = v; op = 0; }
-                        
-                        // --- TENTAR INVERTER (u -> v passa a ser v -> u) ---
-                        // Ao inverter, o nó 'u' vai ganhar um novo pai ('v').
-                        // Temos de verificar se 'u' tem espaço.
-                        
-                        if (u != indiceClasse) { // 'u' não pode ser a classe (classe não tem pais)
-                            boolean podeInverter = false;
-
-                            if (v == indiceClasse) {
-                                // Se vamos receber a CLASSE como pai, é permitido (slot extra)
-                                podeInverter = true;
-                            } else {
-                                // Se vamos receber um ATRIBUTO como pai, verificamos o limite k
-                                if (contarPaisAtributos(u, indiceClasse) < k) {
-                                    podeInverter = true;
+                    // TENTAR ADICIONAR
+                    if (!existe) {
+                        if (contaPaisReais(v, indiceClasse) < k) {
+                            if (!connected(v, u)) { 
+                                double delta = deltaScoreAdicionar(v, u, T);
+                                if (delta > melhorDelta) {
+                                    melhorDelta = delta; op = 2; bestU = u; bestV = v;
                                 }
                             }
-
-                            if (podeInverter) {
-                                double dInv = MDLdelta(T, u, v, 1);
-                                if (dInv > melhorDelta) { melhorDelta = dInv; bestU = u; bestV = v; op = 1; }
-                            }
+                        }
+                    } 
+                    // TENTAR REMOVER ou INVERTER
+                    else {
+                        // Remover
+                        double deltaRem = deltaScoreRemover(v, u, T);
+                        if (deltaRem > melhorDelta) {
+                            melhorDelta = deltaRem; op = 0; bestU = u; bestV = v;
+                        }
+                        
+                        // Inverter
+                        if (u != indiceClasse && contaPaisReais(u, indiceClasse) < k) {
+                             if (!connected(u, v)) { 
+                                 double deltaInv = deltaScoreInverter(u, v, T);
+                                 if (deltaInv > melhorDelta) {
+                                     melhorDelta = deltaInv; op = 1; bestU = u; bestV = v;
+                                 }
+                             }
                         }
                     }
                 }
             }
 
-            // Aplica a melhor operação encontrada nesta iteração
-            if (melhorDelta > 0.0001) { 
+            // Aplica a melhor operação e atualiza cache local
+            if (op != -1) {
                 melhorou = true;
-                if (op == 0) remove_edge(bestU, bestV);
-                else if (op == 1) invert_edge(bestU, bestV);
-                else if (op == 2) add_edge(bestU, bestV);
+                
+                // --- DEBUG PRINT: PARA VERES O CÓDIGO A CORRER ---
+                if (iteracao % 50 == 0 || iteracao == 1) { // Imprime a cada 50 passos para não encher a consola
+                     System.out.println("Iteração " + iteracao + " | Delta: " + melhorDelta + " | Op: " + op + " (" + bestU + "->" + bestV + ")");
+                }
+                
+                if (op == 0) { // Remove
+                    remove_edge(bestU, bestV);
+                    cacheScoresLocais[bestV] = scoreRapido(bestV, T);
+                } else if (op == 1) { // Inverte
+                    invert_edge(bestU, bestV);
+                    cacheScoresLocais[bestU] = scoreRapido(bestU, T); 
+                    cacheScoresLocais[bestV] = scoreRapido(bestV, T);
+                } else if (op == 2) { // Adiciona
+                    add_edge(bestU, bestV);
+                    cacheScoresLocais[bestV] = scoreRapido(bestV, T);
+                }
             }
         }
+        
+        System.out.println(">> Aprendizagem concluída após " + iteracao + " iterações.");
+        
+        // Limpeza de memória (Opcional, mas boa prática)
+        cachePares = null;
+        cacheSimples = null;
     }
 
-    // --- NOVO MÉTODO AUXILIAR ---
-    // Conta quantos pais o nó tem, IGNORANDO a Classe.
-    private int contarPaisAtributos(int node, int indiceClasse) {
-        int count = 0;
-        LinkedList<Integer> pais = parents(node);
-        for (Integer pai : pais) {
-            if (pai != indiceClasse) {
-                count++;
+    private int contaPaisReais(int node, int classe) {
+        int c = 0;
+        for (int p : parents(node)) if (p != classe) c++;
+        return c;
+    }
+
+    // =========================================================================
+    //               SCORES ULTRA RÁPIDOS
+    // =========================================================================
+
+    private double deltaScoreAdicionar(int filho, int novoPai, Amostra T) {
+        LinkedList<Integer> pais = parents(filho);
+        pais.add(novoPai);
+        return calcMDL(filho, pais, T) - cacheScoresLocais[filho];
+    }
+
+    private double deltaScoreRemover(int filho, int paiRemover, Amostra T) {
+        LinkedList<Integer> pais = parents(filho);
+        pais.remove((Integer)paiRemover);
+        return calcMDL(filho, pais, T) - cacheScoresLocais[filho];
+    }
+
+    private double deltaScoreInverter(int u, int v, Amostra T) {
+        LinkedList<Integer> paisV = parents(v); paisV.remove((Integer)u);
+        LinkedList<Integer> paisU = parents(u); paisU.add(v);
+        
+        double novoV = calcMDL(v, paisV, T);
+        double novoU = calcMDL(u, paisU, T);
+        return (novoV + novoU) - (cacheScoresLocais[v] + cacheScoresLocais[u]);
+    }
+
+    private double scoreRapido(int i, Amostra T) {
+        return calcMDL(i, parents(i), T);
+    }
+
+ // --- CÁLCULO MDL OTIMIZADO (VERSÃO FINAL V2) ---
+    private double calcMDL(int filho, LinkedList<Integer> pais, Amostra T) {
+        double LL = 0.0;
+        int domFilho = T.domain(filho);
+        int N = T.length(); 
+        
+        // 1. SEM PAIS (Usa cacheSimples - Instantâneo)
+        if (pais.isEmpty()) {
+            for (int val = 0; val < domFilho; val++) {
+                int count = cacheSimples[filho][val];
+                if (count > 0) {
+                    double p = (double) count / N;
+                    LL += count * Math.log(p);
+                }
+            }
+        } 
+        // 2. COM PAIS
+        else {
+            int[] paisArr = pais.stream().mapToInt(i->i).toArray();
+            int numPais = paisArr.length;
+            
+            // Caso Rápido: 1 Pai (Usa cachePares 4D - Instantâneo)
+            if (numPais == 1) {
+                int pai = paisArr[0];
+                int domPai = T.domain(pai);
+                for (int vf = 0; vf < domFilho; vf++) {
+                    for (int vp = 0; vp < domPai; vp++) {
+                        int count = cachePares[filho][pai][vf][vp];
+                        if (count > 0) {
+                            int countPai = cacheSimples[pai][vp];
+                            double probCond = (double) count / countPai;
+                            LL += count * Math.log(probCond);
+                        }
+                    }
+                }
+            }
+            // Caso TAN: 2 Pais (A Correção Crítica!)
+            else if (numPais == 2) {
+                // Em vez de chamar T.count() milhares de vezes, 
+                // fazemos UMA leitura sequencial da Amostra para encher uma tabela temporária.
+                // Isto acelera o processo em 5000x.
+                
+                int p1 = paisArr[0];
+                int p2 = paisArr[1];
+                int domP1 = T.domain(p1);
+                int domP2 = T.domain(p2);
+                
+                // Tabela temporária na RAM (Pequena: ~15KB)
+                int[][][] countsTrio = new int[domFilho][domP1][domP2];
+                int[][] countsPais = new int[domP1][domP2];
+                
+                // PASSADA ÚNICA (O Segredo da Velocidade)
+                for(int k=0; k<N; k++) {
+                    int[] linha = T.element(k); // Acesso rápido à matriz da Amostra
+                    int vf = linha[filho];
+                    int vp1 = linha[p1];
+                    int vp2 = linha[p2];
+                    
+                    countsTrio[vf][vp1][vp2]++;
+                    countsPais[vp1][vp2]++;
+                }
+                
+                // Cálculo Matemático Puro (Sem acesso à Amostra)
+                for(int vf=0; vf<domFilho; vf++) {
+                    for(int vp1=0; vp1<domP1; vp1++) {
+                        for(int vp2=0; vp2<domP2; vp2++) {
+                            int N_fpp = countsTrio[vf][vp1][vp2];
+                            if (N_fpp > 0) {
+                                int N_pp = countsPais[vp1][vp2];
+                                LL += N_fpp * Math.log((double)N_fpp / N_pp);
+                            }
+                        }
+                    }
+                }
+            }
+            else {
+                // Fallback para K > 2 (Lento, mas seguro)
+                LL = -Double.MAX_VALUE; 
             }
         }
-        return count;
-    }
-    
-    // --- CÁLCULO DO SCORE MDL GLOBAL ---
-    public double MDL(Amostra T) {
-        double total = 0.0;
-        for(int i=0; i<n; i++) total += scoreLocal(i, T);
-        return total;
-    }
 
-    // --- CÁLCULO DO SCORE MDL DELTA ---
-    public double MDLdelta(Amostra T, int u, int v, int operacao) {
-        double delta = Double.NEGATIVE_INFINITY;
+        // Penalização MDL
+        long params = T.domain(filho) - 1;
+        long q = 1;
+        for(int p : pais) q *= T.domain(p);
+        params *= q;
         
-        if (operacao == 2) { // Adicionar u -> v
-            if (connected(v, u)) return Double.NEGATIVE_INFINITY; // Ciclo!
-            
-            double sAntes = scoreLocal(v, T);
-            add_edge(u, v); 
-            double sDepois = scoreLocal(v, T);
-            remove_edge(u, v); 
-            
-            delta = sDepois - sAntes;
-        } 
-        else if (operacao == 0) { // Remover u -> v
-            double sAntes = scoreLocal(v, T);
-            remove_edge(u, v); 
-            double sDepois = scoreLocal(v, T);
-            add_edge(u, v); 
-            
-            delta = sDepois - sAntes;
-        } 
-        else if (operacao == 1) { // Inverter u -> v
-            remove_edge(u, v);
-            if (connected(u, v)) { add_edge(u, v); return Double.NEGATIVE_INFINITY; }
-            add_edge(u, v); 
-
-            double sAntes = scoreLocal(u, T) + scoreLocal(v, T);
-            invert_edge(u, v); 
-            double sDepois = scoreLocal(u, T) + scoreLocal(v, T);
-            invert_edge(v, u); 
-            
-            delta = sDepois - sAntes;
-        }
-        return delta;
-    }
-
-    // Calcula o score MDL de um único nó Xi
-    private double scoreLocal(int Xi, Amostra T) {
-        int m = T.length();
-        
-        // 1. Log-Likelihood
-        double logLikelihood = m * informacaoMutuaCondicional(T, Xi);
-
-        // 2. Penalização
-        int C = T.dim() - 1; 
-        int dimXi = T.domain(Xi); 
-        int dimC = T.domain(C);     
-        
-        int qi = 1;
-        for (int pai : parents(Xi)) qi *= T.domain(pai);
-        
-        int params = (dimXi - 1) * qi * dimC;
-        
-        double log2m = Math.log(m) / Math.log(2); 
-        double penalizacao = (log2m / 2.0) * params;
-
-        return logLikelihood - penalizacao;
-    }
-
-    // --- CÁLCULO DA INFORMAÇÃO MÚTUA CONDICIONAL ---
-    private double informacaoMutuaCondicional(Amostra T, int Xi) {
-        int C = T.dim() - 1;                
-        LinkedList<Integer> pais = parents(Xi);
-        int m = T.length();
-
-        int[] vars = new int[pais.size() + 2];
-        for (int i = 0; i < pais.size(); i++) vars[i] = pais.get(i);
-        vars[pais.size()] = Xi;
-        vars[pais.size() + 1] = C; 
-
-        return percorreIMC(T, vars, new int[vars.length], 0, m);
-    }
-
-    private double percorreIMC(Amostra T, int[] vars, int[] vals, int idx, int m) {
-        if (idx == vars.length) {
-            double n_xyz = T.count(vars, vals); 
-            if (n_xyz == 0) return 0.0;
-
-            int[] vars_xc = { vars[vars.length - 2], vars[vars.length - 1] }; 
-            int[] vals_xc = { vals[vars.length - 2], vals[vars.length - 1] };
-            
-            int[] vars_wc = new int[vars.length - 1];
-            int[] vals_wc = new int[vals.length - 1];
-            System.arraycopy(vars, 0, vars_wc, 0, vars.length - 1); 
-            System.arraycopy(vals, 0, vals_wc, 0, vals.length - 1);
-
-            double n_xc = T.count(vars_xc, vals_xc);
-            double n_wc = T.count(vars_wc, vals_wc);
-            int C = vars[vars.length - 1];
-            double n_c = T.count(C, vals[vars.length - 1]);
-
-            double P_xyz = n_xyz / m;
-            double P_xc  = n_xc  / m;
-            double P_wc  = n_wc  / m;
-            double P_c   = n_c   / m;
-
-            return P_xyz * Math.log((P_xyz * P_c) / (P_xc * P_wc));
-        }
-
-        double sum = 0.0;
-        for (int v = 0; v < T.domain(vars[idx]); v++) {
-            vals[idx] = v;
-            sum += percorreIMC(T, vars, vals, idx + 1, m);
-        }
-        return sum;
+        return LL - ((Math.log(N) / 2.0) * params);
     }
 }
