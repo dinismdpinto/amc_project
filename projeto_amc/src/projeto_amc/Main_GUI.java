@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List; // Import necessário para a lista de inputs
 
 public class Main_GUI extends JFrame {
+	double valor_S = 0.5;
 
     private static final long serialVersionUID = 1L;
 
@@ -51,13 +52,13 @@ public class Main_GUI extends JFrame {
         // 1. PAINEL SUPERIOR (Carregamento)
         JPanel painelTopo = new JPanel(new FlowLayout(FlowLayout.LEFT));
         painelTopo.setBorder(new TitledBorder("1. Carregar Dados"));
-        painelTopo.setBackground(new Color(240, 248, 255)); // Azul muito claro
+        painelTopo.setBackground(new Color(153, 204, 255)); // Azul muito claro
         
         comboFicheiros = new JComboBox<>(ficheiros);
         btnCarregar = new JButton("Carregar Dataset");
-        btnCarregar.setBackground(new Color(70, 130, 180));
-        btnCarregar.setForeground(Color.WHITE);
-        btnCarregar.setFocusPainted(false);
+        btnCarregar.setBackground(Color.WHITE);
+        btnCarregar.setForeground(Color.BLACK);
+        btnCarregar.setFocusPainted(true);
         
         lblStatusDados = new JLabel("Nenhum dado carregado.");
         lblStatusDados.setForeground(Color.GRAY);
@@ -349,7 +350,7 @@ public class Main_GUI extends JFrame {
 
                 Grafosorientados grafo = new Grafosorientados(treino.dim());
                 grafo.aprender(treino); 
-                Redebayesiana classificador = new Redebayesiana(grafo, treino, 0.5);
+                Redebayesiana classificador = new Redebayesiana(grafo, treino, valor_S);
 
                 int acertosNoFold = 0;
                 for (int[] casoTeste : listaTeste) {
@@ -414,7 +415,7 @@ public class Main_GUI extends JFrame {
 
                 Grafosorientados grafo = new Grafosorientados(treino.dim());
                 grafo.aprender(treino);
-                Redebayesiana classificador = new Redebayesiana(grafo, treino, 0.5);
+                Redebayesiana classificador = new Redebayesiana(grafo, treino, valor_S);
 
                 int[] testeSemClasse = teste.clone();
                 testeSemClasse[testeSemClasse.length - 1] = 0; 
@@ -480,7 +481,7 @@ public class Main_GUI extends JFrame {
                 try {
                     grafoFinal = new Grafosorientados(amostraCompleta.dim());
                     grafoFinal.aprender(amostraCompleta);
-                    classificadorFinal = new Redebayesiana(grafoFinal, amostraCompleta, 0.5);
+                    classificadorFinal = new Redebayesiana(grafoFinal, amostraCompleta, valor_S);
                     modeloTreinado = true;
                     
                     SwingUtilities.invokeLater(() -> {

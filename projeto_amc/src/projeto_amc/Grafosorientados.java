@@ -95,6 +95,10 @@ public class Grafosorientados {
     //                        ALGORITMO DE APRENDIZAGEM
     // =========================================================================
 
+ // =========================================================================
+    //                        ALGORITMO DE APRENDIZAGEM (LOUD VERSION)
+    // =========================================================================
+
     public void aprender(Amostra T) {
         int k = 2;
         aprender(T, k);
@@ -109,7 +113,7 @@ public class Grafosorientados {
 
         boolean melhorou = true;
         int indiceClasse = n - 1;
-        int iteracao = 0; // Contador para DEBUG
+        int iteracao = 0;
 
         System.out.println(">> A iniciar Hill-Climbing (K=" + k + ")...");
 
@@ -163,10 +167,9 @@ public class Grafosorientados {
             if (op != -1) {
                 melhorou = true;
                 
-                // --- DEBUG PRINT: PARA VERES O CÓDIGO A CORRER ---
-                if (iteracao % 50 == 0 || iteracao == 1) { // Imprime a cada 50 passos para não encher a consola
-                     System.out.println("Iteração " + iteracao + " | Delta: " + melhorDelta + " | Op: " + op + " (" + bestU + "->" + bestV + ")");
-                }
+                // --- PRINT SEM FILTRO (IMPRIME TUDO) ---
+                String acao = (op == 2) ? "Adicionar" : (op == 0 ? "Remover" : "Inverter");
+                System.out.println("Iteração " + iteracao + " | Delta: " + melhorDelta + " | " + acao + ": " + bestU + " -> " + bestV);
                 
                 if (op == 0) { // Remove
                     remove_edge(bestU, bestV);
@@ -184,9 +187,10 @@ public class Grafosorientados {
         
         System.out.println(">> Aprendizagem concluída após " + iteracao + " iterações.");
         
-        // Limpeza de memória (Opcional, mas boa prática)
+        // Limpeza de memória
         cachePares = null;
         cacheSimples = null;
+
     }
 
     private int contaPaisReais(int node, int classe) {
