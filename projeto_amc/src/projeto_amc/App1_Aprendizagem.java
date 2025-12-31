@@ -4,28 +4,31 @@ import javax.swing.*;
 import java.awt.*;
 import java.io.FileOutputStream;
 import java.io.ObjectOutputStream;
+import java.util.LinkedList;
+import java.util.Random;
 
 /**
- * Aplicação 1: Aprendizagem da Rede Bayesiana e gravação em disco
- * Requisito do enunciado (pág. 29): lê a amostra, aprende a rede e grava-a no disco
- * Parâmetros configuráveis: k (máx pais atributos) e número de restarts aleatórios
+ * Aplicação 1: Aprendizagem da Rede Bayesiana
+ * Adaptação: O algoritmo de aprendizagem está implementado AQUI 
+ * para não alterar a classe Graphoo.
  */
 public class App1_Aprendizagem extends JFrame {
+
+    private static final long serialVersionUID = 1L;
 
     private JComboBox<String> comboDatasets;
     private JTextField campoK, campoRestarts;
     private JTextArea areaLog;
     private JButton btnAprender;
 
-    // Datasets do enunciado (pág. 29)
     private final String[] datasets = {
             "bcancer.csv", "diabetes.csv", "hepatitis.csv",
-            "parkisons.csv", "thyroid.csv", "soybean-large.csv", "satimage.csv"
+            "parkisons.csv", "thyroid.csv", "soybean-large.csv", "satimage.csv", "letter.csv"
     };
 
     public App1_Aprendizagem() {
-        setTitle("Aplicação 1 - Aprendizagem e Gravação da Rede Bayesiana");
-        setSize(700, 500);
+        setTitle("Aplicação 1 - Aprendizagem (Lógica Externa)");
+        setSize(750, 600);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(10, 10));
@@ -43,7 +46,7 @@ public class App1_Aprendizagem extends JFrame {
         painelConfig.add(campoK);
 
         painelConfig.add(new JLabel("Número de restarts aleatórios:"));
-        campoRestarts = new JTextField("10", 5);  // Bom equilíbrio precisão/tempo
+        campoRestarts = new JTextField("10", 5);
         painelConfig.add(campoRestarts);
 
         btnAprender = new JButton("Aprender e Gravar Rede (.bn)");
@@ -52,7 +55,6 @@ public class App1_Aprendizagem extends JFrame {
         painelConfig.add(new JLabel(""));
         painelConfig.add(btnAprender);
 
-        // Área de log
         areaLog = new JTextArea();
         areaLog.setEditable(false);
         areaLog.setFont(new Font("Consolas", Font.PLAIN, 13));
@@ -63,43 +65,203 @@ public class App1_Aprendizagem extends JFrame {
         add(scrollLog, BorderLayout.CENTER);
 
         btnAprender.addActionListener(e -> executarAprendizagem());
-
-        log("Aplicação iniciada. Configure e clique em 'Aprender e Gravar Rede'.");
+        
+        log("Aplicação pronta. O algoritmo de aprendizagem correrá aqui localmente.");
     }
 
     private void executarAprendizagem() {
         new Thread(() -> {
             try {
                 String dataset = (String) comboDatasets.getSelectedItem();
-                int k = Integer.parseInt(campoK.getText().trim());
-                int restarts = Integer.parseInt(campoRestarts.getText().trim());
+                
+                // Validação e Ajuste de K
+                int kInput = Integer.parseInt(campoK.getText().trim());
+                int k = kInput;
+                if (k > 2) {
+                    k = 2;
+                    SwingUtilities.invokeLater(() -> campoK.setText("2")); 
+                    log(">>> AVISO: K ajustado para 2 (Limite teórico).");
+                }
 
+                int restarts = Integer.parseInt(campoRestarts.getText().trim());
                 if (k < 0 || restarts < 1) throw new IllegalArgumentException("Parâmetros inválidos.");
 
-                log("\n>>> Carregando dataset: " + dataset);
+                log("\n>>> A carregar dados: " + dataset);
                 Amostra amostra = new Amostra(dataset);
-                log(">>> Instâncias: " + amostra.length() + " | Atributos: " + amostra.dim());
+                log(">>> Dados carregados. Dimensões: " + amostra.length() + " x " + amostra.dim());
 
-                log(">>> Aprendizagem iniciada (k=" + k + ", restarts=" + restarts + ")");
-                Grafosorientados grafo = Grafosorientados.grafoo(amostra.dim());
-                grafo.aprender(amostra, k, restarts);
+                // 1. Criar grafo vazio
+                Graphoo grafo = new Graphoo(amostra.dim());
+                
+                // 2. Executar o algoritmo de aprendizagem EXTERNO
+                log(">>> A executar Hill Climbing com " + restarts + " restarts...");
+                aprenderExternamente(grafo, amostra, k, restarts);
 
-                log(">>> Construindo Rede Bayesiana (S=0.5)");
-                Redebayesiana rede = new Redebayesiana(grafo, amostra, 0.5);
+                log(">>> Score MDL Final: " + String.format("%.4f", grafo.MDL(amostra)));
+                log(">>> Construindo BN e gravando...");
+                
+                BN rede = new BN(grafo, amostra, 0.5);
 
                 String ficheiroBn = dataset.replace(".csv", ".bn");
                 try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(ficheiroBn))) {
                     oos.writeObject(rede);
                 }
 
-                log(">>> SUCESSO! Rede gravada em: " + ficheiroBn);
-                log(">>> Pode agora usar a Aplicação 2 para classificar pacientes.");
+                log(">>> SUCESSO! Ficheiro criado: " + ficheiroBn);
 
             } catch (Exception ex) {
                 log("ERRO: " + ex.getMessage());
                 ex.printStackTrace();
             }
         }).start();
+    }
+
+    // =========================================================================
+    //        ALGORITMO DE APRENDIZAGEM (FORA DA GRAPHOO)
+    // =========================================================================
+
+    private void aprenderExternamente(Graphoo g, Amostra T, int k, int numStarts) {
+        int n = T.dim();
+        int classe = n - 1;
+
+        // 1. Configurar Grafo Base (Classe é pai de todos)
+        for (int i = 0; i < classe; i++) {
+            g.add_edge(classe, i);
+        }
+
+        // Variáveis para guardar o melhor resultado
+        Graphoo melhorGrafo = new Graphoo(g); // Usa o construtor de cópia
+        double melhorScore = melhorGrafo.MDL(T);
+
+        // 2. Random Restarts
+        for (int s = 0; s < numStarts; s++) {
+            // log("   > Restart " + (s + 1) + "/" + numStarts);
+            
+            Graphoo candidato;
+            if (s == 0) {
+                // Primeira tentativa: começa do grafo base (vazio + classe)
+                candidato = new Graphoo(g);
+            } else {
+                // Outras tentativas: começa de grafo aleatório
+                candidato = gerarGrafoAleatorio(n, k, classe);
+            }
+
+            // Executar Hill Climbing neste candidato
+            executarHillClimbing(candidato, T, k);
+
+            // Verificar se é o melhor
+            double scoreAtual = candidato.MDL(T);
+            if (scoreAtual > melhorScore) {
+                melhorScore = scoreAtual;
+                melhorGrafo = new Graphoo(candidato); // Guardar cópia do vencedor
+                log("   > Novo melhor score encontrado: " + String.format("%.2f", melhorScore));
+            }
+        }
+
+        // 3. Copiar o melhor resultado para o grafo original 'g'
+        // Como não podemos fazer "g = melhorGrafo", temos de copiar a estrutura
+        // Assumindo que g está vazio ou sujo, limpamo-lo primeiro? 
+        // A Graphoo não tem "clear", mas podemos reconstruir.
+        
+        // Estratégia de Cópia Manual (já que não podemos mudar Graphoo):
+        // 1. Removemos todas as arestas existentes em G
+        for(int i=0; i<n; i++) {
+            // Copiar lista para evitar ConcurrentModificationException
+            LinkedList<Integer> pais = new LinkedList<>(g.parents(i));
+            for(Integer p : pais) g.remove_edge(p, i);
+        }
+        
+        // 2. Adicionamos as arestas do melhorGrafo
+        for(int i=0; i<n; i++) {
+            // parents() retorna quem aponta para i. add_edge(pai, filho)
+            for(Integer pai : melhorGrafo.parents(i)) {
+                g.add_edge(pai, i);
+            }
+        }
+    }
+
+    private Graphoo gerarGrafoAleatorio(int n, int k, int classe) {
+        Graphoo g = new Graphoo(n);
+        // Adicionar arestas fixas da classe
+        for (int i = 0; i < classe; i++) g.add_edge(classe, i);
+
+        Random rand = new Random();
+        int tentativas = n * k; // Tenta adicionar algumas arestas extra
+
+        for (int t = 0; t < tentativas; t++) {
+            int u = rand.nextInt(classe); // Pai (atributo)
+            int v = rand.nextInt(classe); // Filho (atributo)
+
+            if (u != v) {
+                // Verifica se já existe
+                if (!g.parents(v).contains(u)) {
+                    // Verifica limite K (lembrando que parents() inclui a classe)
+                    if (g.parents(v).size() < k + 1) { // +1 da classe
+                        // Verifica ciclo
+                        if (!g.connected(v, u)) {
+                            g.add_edge(u, v);
+                        }
+                    }
+                }
+            }
+        }
+        return g;
+    }
+
+    private void executarHillClimbing(Graphoo g, Amostra T, int k) {
+        int n = T.dim();
+        int classe = n - 1;
+        int maxParents = k + 1; // Atributos + Classe
+        boolean melhorou = true;
+
+        while (melhorou) {
+            melhorou = false;
+            double melhorDelta = 0.0001;
+            int op = -1, bestU = -1, bestV = -1;
+
+            // Testar todas as arestas possíveis
+            for (int u = 0; u < n; u++) {
+                for (int v = 0; v < n; v++) {
+                    // Ignorar arestas da classe ou para a classe
+                    if (u == v || u == classe || v == classe) continue;
+
+                    boolean existe = g.parents(v).contains(u);
+
+                    if (!existe) {
+                        // Tentar ADICIONAR (2)
+                        if (g.parents(v).size() < maxParents && !g.connected(v, u)) {
+                            double delta = g.MDLdelta(T, u, v, 2);
+                            if (delta > melhorDelta) {
+                                melhorDelta = delta; op = 2; bestU = u; bestV = v;
+                            }
+                        }
+                    } else {
+                        // Tentar REMOVER (0)
+                        double deltaRem = g.MDLdelta(T, u, v, 0);
+                        if (deltaRem > melhorDelta) {
+                            melhorDelta = deltaRem; op = 0; bestU = u; bestV = v;
+                        }
+
+                        // Tentar INVERTER (1)
+                        // Verifica se 'u' tem espaço para receber 'v' como pai
+                        if (g.parents(u).size() < maxParents && !g.connected(u, v)) {
+                            double deltaInv = g.MDLdelta(T, u, v, 1);
+                            if (deltaInv > melhorDelta) {
+                                melhorDelta = deltaInv; op = 1; bestU = u; bestV = v;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Aplicar melhor operação
+            if (op != -1) {
+                melhorou = true;
+                if (op == 0) g.remove_edge(bestU, bestV);
+                else if (op == 1) g.invert_edge(bestU, bestV);
+                else if (op == 2) g.add_edge(bestU, bestV);
+            }
+        }
     }
 
     private void log(String msg) {

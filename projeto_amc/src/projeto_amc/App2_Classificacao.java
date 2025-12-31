@@ -5,135 +5,207 @@ import java.awt.*;
 import java.io.FileInputStream;
 import java.io.ObjectInputStream;
 import java.util.ArrayList;
+import java.util.Arrays; 
 
 /**
- * Aplicação 2: Carregamento da Rede Bayesiana e classificação manual
- * Requisito do enunciado (pág. 29): lê a rede do disco, permite inserir parâmetros do paciente e classifica-o
- * Usa getters da Redebayesiana para obter dim() e domain()
+ * Aplicação 2: Classificação e Diagnóstico
+ * Requisito: Interface sequencial, texto preto, controlo pelo utilizador.
  */
 public class App2_Classificacao extends JFrame {
+    
+    private static final long serialVersionUID = 1L;
 
     private JButton btnCarregar, btnClassificar;
-    private JPanel painelInputs;
     private JTextArea areaLog;
-    private Redebayesiana rede;
-    private ArrayList<JTextField> campos = new ArrayList<>();
+    
+    // A nossa classe BN
+    private BN redeCarregada;
+    
+    private ArrayList<JTextField> inputsManuais = new ArrayList<>();
+    private JPanel painelInputs;
 
     public App2_Classificacao() {
-        setTitle("Aplicação 2 - Classificação de Pacientes");
+        setTitle("Aplicação 2: Classificação (BN)");
         setSize(750, 650);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setLocationRelativeTo(null);
+        setLocationRelativeTo(null); // Centrar no ecrã
         setLayout(new BorderLayout(10, 10));
 
-        // Botões superiores
-        JPanel painelBotoes = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 10));
-        painelBotoes.setBorder(BorderFactory.createTitledBorder("Controles"));
+        // =================================================================
+        // PAINEL SUPERIOR: Passo 1 (Carregar)
+        // =================================================================
+        JPanel pTopo = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        pTopo.setBorder(BorderFactory.createTitledBorder("Passo 1: Carregar Modelo"));
 
         btnCarregar = new JButton("Carregar Rede (.bn)");
+        // Requisito: Texto a Preto
+        btnCarregar.setForeground(Color.BLACK);
+        btnCarregar.setBackground(new Color(220, 220, 220)); // Cinzento claro
+        btnCarregar.setFont(new Font("SansSerif", Font.BOLD, 12));
+        
+        pTopo.add(btnCarregar);
+
+        // =================================================================
+        // PAINEL CENTRAL: Passo 2 (Inputs)
+        // =================================================================
+        // Usamos um painel 'wrapper' para colocar os inputs no topo
+        JPanel pCentroWrapper = new JPanel(new BorderLayout());
+        pCentroWrapper.setBorder(BorderFactory.createTitledBorder("Passo 2: Atributos do Paciente"));
+        
+        painelInputs = new JPanel(new GridLayout(0, 4, 10, 10)); // Grid dinâmico
+        
+        // Botão Classificar (Fica junto aos inputs pois depende deles)
+        JPanel pBotoesAcao = new JPanel(new FlowLayout(FlowLayout.CENTER));
         btnClassificar = new JButton("Classificar Paciente");
-        btnClassificar.setEnabled(false);
+        // Requisito: Texto a Preto
+        btnClassificar.setForeground(Color.BLACK);
+        btnClassificar.setBackground(new Color(144, 238, 144)); // Verde Claro
+        btnClassificar.setFont(new Font("SansSerif", Font.BOLD, 12));
+        btnClassificar.setEnabled(false); // Só ativa depois de carregar a rede
+        
+        pBotoesAcao.add(btnClassificar);
 
-        painelBotoes.add(btnCarregar);
-        painelBotoes.add(btnClassificar);
+        pCentroWrapper.add(new JScrollPane(painelInputs), BorderLayout.CENTER);
+        pCentroWrapper.add(pBotoesAcao, BorderLayout.SOUTH);
 
-        // Painel de inputs
-        painelInputs = new JPanel();
-        painelInputs.setLayout(new GridLayout(0, 2, 10, 10));
-        JScrollPane scrollInputs = new JScrollPane(painelInputs);
-        scrollInputs.setBorder(BorderFactory.createTitledBorder("Parâmetros do Paciente"));
-
-        // Log inferior
-        areaLog = new JTextArea();
+        // =================================================================
+        // PAINEL INFERIOR: Passo 3 (Resultados/Log)
+        // =================================================================
+        areaLog = new JTextArea(12, 40); 
         areaLog.setEditable(false);
         areaLog.setFont(new Font("Consolas", Font.PLAIN, 13));
         JScrollPane scrollLog = new JScrollPane(areaLog);
-        scrollLog.setBorder(BorderFactory.createTitledBorder("Resultado"));
-        scrollLog.setPreferredSize(new Dimension(0, 150));
+        scrollLog.setBorder(BorderFactory.createTitledBorder("Passo 3: Resultados e Log"));
 
-        add(painelBotoes, BorderLayout.NORTH);
-        add(scrollInputs, BorderLayout.CENTER);
+        // Adicionar tudo à Janela Principal
+        add(pTopo, BorderLayout.NORTH);
+        add(pCentroWrapper, BorderLayout.CENTER);
         add(scrollLog, BorderLayout.SOUTH);
 
-        btnCarregar.addActionListener(e -> carregarRede());
+        // Ações (Listeners)
+        btnCarregar.addActionListener(e -> carregar());
         btnClassificar.addActionListener(e -> classificar());
-
-        log("Aplicação iniciada. Carregue uma rede .bn para começar.");
+        
+        log("Bem-vindo à Aplicação de Classificação.");
+        log("Por favor, clique em 'Carregar Rede' para escolher um ficheiro .bn");
     }
 
-    private void carregarRede() {
+    private void carregar() {
+        // O utilizador decide quando abre o ficheiro
         JFileChooser fc = new JFileChooser(".");
-        fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Rede Bayesiana", "bn"));
         if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(fc.getSelectedFile()))) {
-                rede = (Redebayesiana) ois.readObject();
-                log(">>> Rede carregada: " + fc.getSelectedFile().getName());
-                log(">>> Atributos: " + (rede.getDim() - 1) + " | Classes: " + rede.getDomain(rede.getDim() - 1));
-                gerarInputs();
+                
+                redeCarregada = (BN) ois.readObject();
+                
+                log("\n>>> Rede carregada: " + fc.getSelectedFile().getName());
+                
+                // Gera os campos assim que a rede é carregada
+                gerarCamposInput();
+                
                 btnClassificar.setEnabled(true);
+                log(">>> Pronto. Preencha os valores acima e clique em 'Classificar'.");
+                
             } catch (Exception ex) {
                 log("ERRO ao carregar: " + ex.getMessage());
+                ex.printStackTrace();
             }
         }
     }
 
-    private void gerarInputs() {
+    private void gerarCamposInput() {
         painelInputs.removeAll();
-        campos.clear();
-        int numAttrs = rede.getDim() - 1;
-
-        for (int i = 0; i < numAttrs; i++) {
-            int max = rede.getDomain(i) - 1;
-            JLabel lbl = new JLabel("Atributo " + i + " [0-" + max + "]:");
+        inputsManuais.clear();
+        
+        int nVars = redeCarregada.getDim(); 
+        
+        // O último atributo é a classe, ignoramos no input
+        for (int i = 0; i < nVars - 1; i++) {
+            int maxVal = redeCarregada.getDomain(i) - 1; 
+            
+            JLabel lbl = new JLabel("Var " + i + " [0-" + maxVal + "]:");
             lbl.setHorizontalAlignment(SwingConstants.RIGHT);
-            JTextField tf = new JTextField("0", 10);
-            tf.setToolTipText("Valor entre 0 e " + max);
-
-            campos.add(tf);
+            
+            JTextField tf = new JTextField("0");
+            tf.setHorizontalAlignment(SwingConstants.CENTER);
+            
+            inputsManuais.add(tf);
             painelInputs.add(lbl);
             painelInputs.add(tf);
         }
-
+        
         painelInputs.revalidate();
         painelInputs.repaint();
-        log(">>> Campos gerados. Preencha e classifique.");
     }
 
     private void classificar() {
-        if (rede == null) return;
-
         try {
-            int[] paciente = new int[rede.getDim()];
-            int numAttrs = rede.getDim() - 1;
-
-            for (int i = 0; i < numAttrs; i++) {
-                int val = Integer.parseInt(campos.get(i).getText().trim());
-                int max = rede.getDomain(i) - 1;
-                if (val < 0 || val > max) throw new IllegalArgumentException("Atributo " + i + " inválido (0-" + max + ")");
-                paciente[i] = val;
+            int nTotal = redeCarregada.getDim();
+            int[] dados = new int[nTotal];
+            
+            // Ler valores das caixas de texto
+            for (int i = 0; i < inputsManuais.size(); i++) {
+                String texto = inputsManuais.get(i).getText().trim();
+                
+                // Validação básica
+                if(texto.isEmpty()) {
+                    JOptionPane.showMessageDialog(this, "Preencha todos os campos.");
+                    return;
+                }
+                
+                int val = Integer.parseInt(texto);
+                int max = redeCarregada.getDomain(i) - 1;
+                
+                if (val < 0 || val > max) {
+                    JOptionPane.showMessageDialog(this, "Erro na Var " + i + ": Valor deve estar entre 0 e " + max);
+                    return;
+                }
+                dados[i] = val;
             }
-
-            int classe = rede.classificar(paciente);
-
-            log("\n=== RESULTADO ===");
-            log("Classe prevista: " + classe);
-            log("==================\n");
-
+            
+            dados[nTotal - 1] = 0; // Placeholder para a classe
+            
+            // Classificar
+            int resultado = redeCarregada.classificar(dados);
+            
+         // Calcular probabilidade
+            dados[nTotal - 1] = resultado;
+            double prob = redeCarregada.prob(dados);
+            
+            // --- CORREÇÃO DE VISUALIZAÇÃO ---
+            // 1. Criar uma string com o formato correto
+            String textoProbabilidade;
+            
+            if (prob < 0.0001) {
+                // Se for muito pequeno (ex: 1.45e-18), usa Notação Científica
+                textoProbabilidade = String.format("%.4e", prob);
+            } else {
+                // Se for razoável (ex: 0.19), usa Percentagem
+                textoProbabilidade = String.format("%.4f%%", prob * 100);
+            }
+            
+            // 2. Apresentar resultado final (Usando a string formatada)
+            log("--------------------------------------------------");
+            log("Entrada: " + Arrays.toString(Arrays.copyOf(dados, nTotal - 1)));
+            log("PREVISÃO: CLASSE " + resultado);
+            log("Probabilidade Conjunta (P): " + textoProbabilidade);
+            log("--------------------------------------------------");
+            
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "Por favor insira apenas números inteiros.");
         } catch (Exception ex) {
-            log("ERRO: " + ex.getMessage());
+            log("Erro na classificação: " + ex.getMessage());
         }
     }
-
-    private void log(String msg) {
-        SwingUtilities.invokeLater(() -> {
-            areaLog.append(msg + "\n");
-            areaLog.setCaretPosition(areaLog.getDocument().getLength());
-        });
+    
+    private void log(String s) { 
+        areaLog.append(s + "\n"); 
+        areaLog.setCaretPosition(areaLog.getDocument().getLength());
     }
 
     public static void main(String[] args) {
-        try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        try { 
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); 
         } catch (Exception ignored) {}
         SwingUtilities.invokeLater(() -> new App2_Classificacao().setVisible(true));
     }
