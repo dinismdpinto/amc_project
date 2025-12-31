@@ -51,7 +51,7 @@ public class App1_Aprendizagem extends JFrame {
 
         btnAprender = new JButton("Aprender e Gravar Rede (.bn)");
         btnAprender.setBackground(new Color(0, 128, 0));
-        btnAprender.setForeground(Color.WHITE);
+        btnAprender.setForeground(Color.BLACK);
         painelConfig.add(new JLabel(""));
         painelConfig.add(btnAprender);
 
