@@ -31,17 +31,24 @@ public class App2_Classificacao extends JFrame {
         setLocationRelativeTo(null); // Centrar no ecrã
         setLayout(new BorderLayout(10, 10));
 
+        // Fonte consistente para toda a aplicação
+        Font fontePadrao = new Font("SansSerif", Font.PLAIN, 14);
+        Font fonteBold = new Font("SansSerif", Font.BOLD, 14);
+        Font fonteTitulo = new Font("SansSerif", Font.BOLD, 14);
+
         // =================================================================
         // PAINEL SUPERIOR: Passo 1 (Carregar)
         // =================================================================
         JPanel pTopo = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
-        pTopo.setBorder(BorderFactory.createTitledBorder("Passo 1: Carregar Modelo"));
+        pTopo.setBorder(BorderFactory.createTitledBorder(null, "Passo 1: Carregar Modelo",
+                javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION,
+                javax.swing.border.TitledBorder.DEFAULT_POSITION, fonteTitulo));
 
         btnCarregar = new JButton("Carregar Rede (.bn)");
         // Requisito: Texto a Preto
         btnCarregar.setForeground(Color.BLACK);
         btnCarregar.setBackground(new Color(220, 220, 220)); // Cinzento claro
-        btnCarregar.setFont(new Font("SansSerif", Font.BOLD, 12));
+        btnCarregar.setFont(fonteBold);
         
         pTopo.add(btnCarregar);
 
@@ -50,9 +57,15 @@ public class App2_Classificacao extends JFrame {
         // =================================================================
         // Usamos um painel 'wrapper' para colocar os inputs no topo
         JPanel pCentroWrapper = new JPanel(new BorderLayout());
-        pCentroWrapper.setBorder(BorderFactory.createTitledBorder("Passo 2: Atributos do Paciente"));
+        pCentroWrapper.setBorder(BorderFactory.createTitledBorder(null, "Passo 2: Atributos do Paciente",
+                javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION,
+                javax.swing.border.TitledBorder.DEFAULT_POSITION, fonteTitulo));
         
         painelInputs = new JPanel(new GridLayout(0, 4, 10, 10)); // Grid dinâmico
+        
+        // Wrapper para alinhar à esquerda
+        JPanel wrapperEsquerda = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        wrapperEsquerda.add(painelInputs);
         
         // Botão Classificar (Fica junto aos inputs pois depende deles)
         JPanel pBotoesAcao = new JPanel(new FlowLayout(FlowLayout.CENTER));
@@ -60,12 +73,12 @@ public class App2_Classificacao extends JFrame {
         // Requisito: Texto a Preto
         btnClassificar.setForeground(Color.BLACK);
         btnClassificar.setBackground(new Color(144, 238, 144)); // Verde Claro
-        btnClassificar.setFont(new Font("SansSerif", Font.BOLD, 12));
+        btnClassificar.setFont(fonteBold);
         btnClassificar.setEnabled(false); // Só ativa depois de carregar a rede
         
         pBotoesAcao.add(btnClassificar);
 
-        pCentroWrapper.add(new JScrollPane(painelInputs), BorderLayout.CENTER);
+        pCentroWrapper.add(new JScrollPane(wrapperEsquerda), BorderLayout.CENTER);
         pCentroWrapper.add(pBotoesAcao, BorderLayout.SOUTH);
 
         // =================================================================
@@ -73,9 +86,11 @@ public class App2_Classificacao extends JFrame {
         // =================================================================
         areaLog = new JTextArea(12, 40); 
         areaLog.setEditable(false);
-        areaLog.setFont(new Font("Consolas", Font.PLAIN, 13));
+        areaLog.setFont(new Font("Consolas", Font.PLAIN, 14));
         JScrollPane scrollLog = new JScrollPane(areaLog);
-        scrollLog.setBorder(BorderFactory.createTitledBorder("Passo 3: Resultados e Log"));
+        scrollLog.setBorder(BorderFactory.createTitledBorder(null, "Passo 3: Resultados e Log",
+                javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION,
+                javax.swing.border.TitledBorder.DEFAULT_POSITION, fonteTitulo));
 
         // Adicionar tudo à Janela Principal
         add(pTopo, BorderLayout.NORTH);
@@ -87,7 +102,7 @@ public class App2_Classificacao extends JFrame {
         btnClassificar.addActionListener(e -> classificar());
         
         log("Bem-vindo à Aplicação de Classificação.");
-        log("Por favor, clique em 'Carregar Rede' para escolher um ficheiro .bn");
+        log("Por favor, clique em 'Carregar Rede' para escolher o ficheiro bn. pretendido.");
     }
 
     private void carregar() {
@@ -104,7 +119,7 @@ public class App2_Classificacao extends JFrame {
                 gerarCamposInput();
                 
                 btnClassificar.setEnabled(true);
-                log(">>> Pronto. Preencha os valores acima e clique em 'Classificar'.");
+                log(">>> Por favor, preencha os atributos do paciente e depois clique em 'Classificar'.");
                 
             } catch (Exception ex) {
                 log("ERRO ao carregar: " + ex.getMessage());
@@ -117,17 +132,36 @@ public class App2_Classificacao extends JFrame {
         painelInputs.removeAll();
         inputsManuais.clear();
         
+        Font fontePadrao = new Font("SansSerif", Font.PLAIN, 14);
         int nVars = redeCarregada.getDim(); 
+        int numAtributos = nVars - 1; // Excluindo a classe
+        
+        // Calcular número de colunas dinamicamente
+        // Cada par label+campo ocupa 2 colunas no grid
+        int pares;
+        if (numAtributos <= 5) {
+            pares = 2;  // 4 colunas (2 pares)
+        } else if (numAtributos <= 10) {
+            pares = 3;  // 6 colunas (3 pares)
+        } else if (numAtributos <= 20) {
+            pares = 4;  // 8 colunas (4 pares)
+        } else {
+            pares = 5;  // 10 colunas (5 pares) para muitas variáveis
+        }
+        
+        painelInputs.setLayout(new GridLayout(0, pares * 2, 10, 10));
         
         // O último atributo é a classe, ignoramos no input
-        for (int i = 0; i < nVars - 1; i++) {
+        for (int i = 0; i < numAtributos; i++) {
             int maxVal = redeCarregada.getDomain(i) - 1; 
             
             JLabel lbl = new JLabel("Var " + i + " [0-" + maxVal + "]:");
             lbl.setHorizontalAlignment(SwingConstants.RIGHT);
+            lbl.setFont(fontePadrao);
             
-            JTextField tf = new JTextField("0");
+            JTextField tf = new JTextField("0", 3);
             tf.setHorizontalAlignment(SwingConstants.CENTER);
+            tf.setFont(fontePadrao);
             
             inputsManuais.add(tf);
             painelInputs.add(lbl);
@@ -136,6 +170,10 @@ public class App2_Classificacao extends JFrame {
         
         painelInputs.revalidate();
         painelInputs.repaint();
+        
+        // Também re-validar o wrapper pai
+        painelInputs.getParent().revalidate();
+        painelInputs.getParent().repaint();
     }
 
     private void classificar() {

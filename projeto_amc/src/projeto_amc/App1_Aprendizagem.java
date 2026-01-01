@@ -20,6 +20,7 @@ public class App1_Aprendizagem extends JFrame {
     private JTextField campoK, campoRestarts;
     private JTextArea areaLog;
     private JButton btnAprender;
+    private JProgressBar barraProgresso;
 
     private final String[] datasets = {
             "bcancer.csv", "diabetes.csv", "hepatitis.csv",
@@ -33,36 +34,64 @@ public class App1_Aprendizagem extends JFrame {
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(10, 10));
 
-        // Painel de configuração
-        JPanel painelConfig = new JPanel(new GridLayout(4, 2, 10, 10));
-        painelConfig.setBorder(BorderFactory.createTitledBorder("Configuração"));
+        // Painel de configuração (sem o botão)
+        JPanel painelConfig = new JPanel(new GridLayout(3, 2, 10, 10));
+        painelConfig.setBorder(BorderFactory.createTitledBorder(null, "Configuração", 
+                javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION, 
+                javax.swing.border.TitledBorder.DEFAULT_POSITION, 
+                new Font("SansSerif", Font.BOLD, 14)));
 
-        painelConfig.add(new JLabel("Dataset:"));
+        // Fonte maior para labels e campos
+        Font fonteMaior = new Font("SansSerif", Font.PLAIN, 14);
+        
+        JLabel lblDataset = new JLabel("Dataset:");
+        lblDataset.setFont(fonteMaior);
+        painelConfig.add(lblDataset);
         comboDatasets = new JComboBox<>(datasets);
+        comboDatasets.setFont(fonteMaior);
         painelConfig.add(comboDatasets);
 
-        painelConfig.add(new JLabel("Máximo de pais atributos (k):"));
+        JLabel lblK = new JLabel("Máximo de pais atributos (k):");
+        lblK.setFont(fonteMaior);
+        painelConfig.add(lblK);
         campoK = new JTextField("2", 5);
+        campoK.setFont(fonteMaior);
         painelConfig.add(campoK);
 
-        painelConfig.add(new JLabel("Número de restarts aleatórios:"));
+        JLabel lblRestarts = new JLabel("Número de restarts aleatórios:");
+        lblRestarts.setFont(fonteMaior);
+        painelConfig.add(lblRestarts);
         campoRestarts = new JTextField("10", 5);
+        campoRestarts.setFont(fonteMaior);
         painelConfig.add(campoRestarts);
 
-        btnAprender = new JButton("Aprender e Gravar Rede (.bn)");
-        btnAprender.setBackground(new Color(0, 128, 0));
-        btnAprender.setForeground(Color.BLACK);
-        painelConfig.add(new JLabel(""));
-        painelConfig.add(btnAprender);
-
+        // Área de Log (centro)
         areaLog = new JTextArea();
         areaLog.setEditable(false);
-        areaLog.setFont(new Font("Consolas", Font.PLAIN, 13));
+        areaLog.setFont(new Font("Consolas", Font.PLAIN, 14));
         JScrollPane scrollLog = new JScrollPane(areaLog);
         scrollLog.setBorder(BorderFactory.createTitledBorder("Log da Execução"));
 
+        // Painel inferior com barra de progresso e botão
+        JPanel painelInferior = new JPanel(new BorderLayout(10, 10));
+        painelInferior.setBorder(BorderFactory.createEmptyBorder(5, 10, 10, 10));
+
+        barraProgresso = new JProgressBar(0, 100);
+        barraProgresso.setStringPainted(true);
+        barraProgresso.setString("Pronto");
+        barraProgresso.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        
+        btnAprender = new JButton("Aprender e Gravar Rede (.bn)");
+        btnAprender.setBackground(new Color(0, 128, 0));
+        btnAprender.setForeground(Color.BLACK); // Letra preta
+        btnAprender.setFont(new Font("SansSerif", Font.BOLD, 14));
+
+        painelInferior.add(barraProgresso, BorderLayout.CENTER);
+        painelInferior.add(btnAprender, BorderLayout.SOUTH);
+
         add(painelConfig, BorderLayout.NORTH);
         add(scrollLog, BorderLayout.CENTER);
+        add(painelInferior, BorderLayout.SOUTH);
 
         btnAprender.addActionListener(e -> executarAprendizagem());
         
@@ -72,6 +101,9 @@ public class App1_Aprendizagem extends JFrame {
     private void executarAprendizagem() {
         new Thread(() -> {
             try {
+                btnAprender.setEnabled(false);
+                atualizarProgresso(0, "A iniciar...");
+                
                 String dataset = (String) comboDatasets.getSelectedItem();
                 
                 // Validação e Ajuste de K
@@ -86,20 +118,25 @@ public class App1_Aprendizagem extends JFrame {
                 int restarts = Integer.parseInt(campoRestarts.getText().trim());
                 if (k < 0 || restarts < 1) throw new IllegalArgumentException("Parâmetros inválidos.");
 
+                atualizarProgresso(10, "A carregar dados...");
                 log("\n>>> A carregar dados: " + dataset);
                 Amostra amostra = new Amostra(dataset);
                 log(">>> Dados carregados. Dimensões: " + amostra.length() + " x " + amostra.dim());
 
+                atualizarProgresso(20, "A criar grafo...");
                 // 1. Criar grafo vazio
                 Graphoo grafo = new Graphoo(amostra.dim());
                 
                 // 2. Executar o algoritmo de aprendizagem EXTERNO
+                atualizarProgresso(30, "A executar Hill Climbing...");
                 log(">>> A executar Hill Climbing com " + restarts + " restarts...");
                 aprenderExternamente(grafo, amostra, k, restarts);
 
+                atualizarProgresso(80, "A calcular score final...");
                 log(">>> Score MDL Final: " + String.format("%.4f", grafo.MDL(amostra)));
                 log(">>> Construindo BN e gravando...");
                 
+                atualizarProgresso(90, "A gravar ficheiro...");
                 BN rede = new BN(grafo, amostra, 0.5);
 
                 String ficheiroBn = dataset.replace(".csv", ".bn");
@@ -107,13 +144,24 @@ public class App1_Aprendizagem extends JFrame {
                     oos.writeObject(rede);
                 }
 
+                atualizarProgresso(100, "Concluído!");
                 log(">>> SUCESSO! Ficheiro criado: " + ficheiroBn);
 
             } catch (Exception ex) {
+                atualizarProgresso(0, "Erro!");
                 log("ERRO: " + ex.getMessage());
                 ex.printStackTrace();
+            } finally {
+                btnAprender.setEnabled(true);
             }
         }).start();
+    }
+    
+    private void atualizarProgresso(int valor, String texto) {
+        SwingUtilities.invokeLater(() -> {
+            barraProgresso.setValue(valor);
+            barraProgresso.setString(texto);
+        });
     }
 
     // =========================================================================
@@ -133,9 +181,11 @@ public class App1_Aprendizagem extends JFrame {
         Graphoo melhorGrafo = new Graphoo(g); // Usa o construtor de cópia
         double melhorScore = melhorGrafo.MDL(T);
 
-        // 2. Random Restarts
+        // 2. Random Restarts (com progresso de 30% a 80%)
         for (int s = 0; s < numStarts; s++) {
-            // log("   > Restart " + (s + 1) + "/" + numStarts);
+            // Calcular progresso: de 30% a 80% baseado no número de restarts
+            int progresso = 30 + (int)((s + 1) * 50.0 / numStarts);
+            atualizarProgresso(progresso, "Restart " + (s + 1) + "/" + numStarts);
             
             Graphoo candidato;
             if (s == 0) {
