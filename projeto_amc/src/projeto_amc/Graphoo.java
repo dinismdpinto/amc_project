@@ -4,7 +4,8 @@ import java.util.LinkedList;
 import java.util.Queue;
 
 
-public class Graphoo {
+public class Graphoo implements java.io.Serializable {
+    private static final long serialVersionUID = 1L;
     int n; // Número de nós
     LinkedList<Integer>[] adj; //Lista de adjacência (guarda os filhos)
 
@@ -97,7 +98,7 @@ public class Graphoo {
     
     public double MDLdelta(Amostra a, int node1, int node2, int op) {
         double delta = 0.0; //variação 
-        int maxParents = 2; //(k <= 2)
+        int maxParents = 3; //(k <= 2 + classe)
 
         // Remover aresta (node1 -> node2): node2 perde um pai; node1 não muda.
         if (op == 0) {
@@ -307,36 +308,5 @@ public class Graphoo {
         	sb.append("Node " + i + " points to -> " + adj[i] + "\n"); // Associa cada nó à sua lista de adjacência
         }
         return sb.toString();
-    }
-    
-    
-    // =========================================================================
-    //                            TESTES
-    // =========================================================================
-    
-    public static void main(String[] args) {
-		Amostra a= new Amostra("bcancer.csv");
-		Graphoo g = new Graphoo(a.dim()-1);
-		g.add_edge(0, 1);
-		g.add_edge(0, 2);
-		g.add_edge(0, 6);
-		g.add_edge(1,2);
-		g.add_edge(1,3);
-		g.add_edge(6,4);
-		g.add_edge(6,5);
-		System.out.println(g);
-
-        String s = "";
-        double sumII = 0.0;
-        for (int i = 0; i < a.dim() - 1; i++) {
-            double val = g.InteractionInformation(i, a);
-            sumII += val;
-            s = s + "II(" + i + ")=" + val + " ";
-        }
-        System.out.println(s);
-
-        double LL = sumII * a.length();
-        System.out.println("LL= " + LL);
-        System.out.println("MDL= " + g.MDL(a));
     }
 }

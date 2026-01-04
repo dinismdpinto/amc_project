@@ -4,11 +4,11 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedList;
 
-// <--- ALTERAÇÃO ÚNICA: ADICIONADO implements Serializable --->
 public class Amostra implements java.io.Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     // Lista temporária para leitura
     private ArrayList<int[]> bufferLeitura;
@@ -21,6 +21,7 @@ public class Amostra implements java.io.Serializable {
     public Amostra() {
         this.bufferLeitura = new ArrayList<>();
     }
+    
     public Amostra(String csvFile) {
         this();
         BufferedReader br = null;
@@ -38,6 +39,7 @@ public class Amostra implements java.io.Serializable {
             if (br != null) try { br.close(); } catch (IOException e) {}
         }
     }
+    
     private void finalizarLeitura() {
         if (bufferLeitura != null && !bufferLeitura.isEmpty()) {
             dados = new int[bufferLeitura.size()][];
@@ -45,6 +47,7 @@ public class Amostra implements java.io.Serializable {
             bufferLeitura = null;
         }
     }
+    
     public Amostra amostraSem(int index) {
         Amostra nova = new Amostra();
        
@@ -60,6 +63,7 @@ public class Amostra implements java.io.Serializable {
         }
         return nova;
     }
+    
     static int[] convert(String line) {
         String[] strings = line.split(",");
         int[] vec = new int[strings.length];
@@ -68,10 +72,12 @@ public class Amostra implements java.io.Serializable {
         }
         return vec;
     }
+    
     public void add(int[] v) {
         if (dados != null) {
             if (bufferLeitura == null) {
-                bufferLeitura = new ArrayList<>(Arrays.asList(dados));
+                bufferLeitura = new ArrayList<>();
+                for(int[] row : dados) bufferLeitura.add(row);
             }
             dados = null;
         }
@@ -85,18 +91,22 @@ public class Amostra implements java.io.Serializable {
         }
         bufferLeitura.add(v);
     }
+    
     public int length() {
         if (dados != null) return dados.length;
         return bufferLeitura.size();
     }
+    
     public int dim() {
         if (maximos == null) return 0;
         return maximos.length;
     }
+    
     public int[] element(int i) {
         if (dados != null) return dados[i];
         return bufferLeitura.get(i);
     }
+    
     public int count(int[] var, int[] val) {
         if (dados == null) finalizarLeitura();
         int r = 0;
@@ -115,31 +125,58 @@ public class Amostra implements java.io.Serializable {
         }
         return r;
     }
+    
     // Overloads
     public int count(int var, int val) {
-        return count(new int[]{var}, new int[]{val});
+        if (dados == null) finalizarLeitura();
+        int r = 0;
+        for (int[] linha : dados) {
+            if (linha[var] == val) r++;
+        }
+        return r;
     }
+    
     public int count(int var1, int var2, int val1, int val2) {
-        return count(new int[]{var1, var2}, new int[]{val1, val2});
+        if (dados == null) finalizarLeitura();
+        int r = 0;
+        for (int[] linha : dados) {
+            if (linha[var1] == val1 && linha[var2] == val2) r++;
+        }
+        return r;
     }
+    
     public int count(int var1, int var2, int var3, int val1, int val2, int val3){
-        return count(new int[]{var1,var2,var3}, new int[]{val1,val2,val3});
+        if (dados == null) finalizarLeitura();
+        int r = 0;
+        for (int[] linha : dados) {
+            if (linha[var1] == val1 && linha[var2] == val2 && linha[var3] == val3) r++;
+        }
+        return r;
     }
+    
     public int count(int var1, int var2, int var3, int var4, int val1, int val2, int val3, int val4){
-        return count(new int[]{var1,var2,var3,var4}, new int[]{val1,val2,val3,val4});
+        if (dados == null) finalizarLeitura();
+        int r = 0;
+        for (int[] linha : dados) {
+            if (linha[var1] == val1 && linha[var2] == val2 && linha[var3] == val3 && linha[var4] == val4) r++;
+        }
+        return r;
     }
+    
     public int domain(int var[]) {
         if (var == null) return 0;
         int r = 1;
         for (int i : var) r *= (maximos[i] + 1);
         return r;
     }
+    
     public int domain(LinkedList<Integer> var){
         if (var == null) return 0;
         int r = 1;
         for (int i : var) r *= (maximos[i] + 1);
         return r;
     }
+    
     public int domain(int v) { return maximos[v] + 1; }
    
     @Override

@@ -1,6 +1,7 @@
 package projeto_amc;
 
 import javax.swing.*;
+import javax.swing.border.*;
 import java.awt.*;
 import java.io.FileInputStream;
 import java.io.ObjectInputStream;
@@ -10,235 +11,368 @@ import java.util.Arrays;
 /**
  * Aplicação 2: Classificação e Diagnóstico
  * Requisito: Interface sequencial, texto preto, controlo pelo utilizador.
+ * Com sistema de feedback visual (bordas coloridas) para indicar estados.
  */
 public class App2_Classificacao extends JFrame {
     
     private static final long serialVersionUID = 1L;
 
-    private JButton btnCarregar, btnClassificar;
-    private JTextArea areaLog;
+    private JButton loadButton, classifyButton, changeFileButton, clearDataButton;
+    private JLabel loadedFileLabel;
+    private JTextArea logArea;
     
     // A nossa classe BN
-    private BN redeCarregada;
+    private BN loadedNetwork;
     
-    private ArrayList<JTextField> inputsManuais = new ArrayList<>();
-    private JPanel painelInputs;
+    private ArrayList<JTextField> manualInputs = new ArrayList<>();
+    private JPanel inputsPanel;
+    
+    // Painéis para controlar as bordas
+    private JPanel topPanel;
+    private JPanel centerWrapperPanel;
+    
+    // Cores para os estados
+    private static final Color COLOR_YELLOW = new Color(255, 200, 0);
+    private static final Color COLOR_GREEN = new Color(0, 180, 0);
+    private static final Color COLOR_RED = new Color(200, 0, 0);
+    private static final Color COLOR_WHITE = Color.WHITE;
+    
+    // Fontes
+    private Font defaultFont;
+    private Font boldFont;
+    private Font titleFont;
 
     public App2_Classificacao() {
         setTitle("Aplicação 2: Classificação (BN)");
-        setSize(750, 650);
+        setSize(800, 700);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null); // Centrar no ecrã
         setLayout(new BorderLayout(10, 10));
 
         // Fonte consistente para toda a aplicação
-        Font fontePadrao = new Font("SansSerif", Font.PLAIN, 14);
-        Font fonteBold = new Font("SansSerif", Font.BOLD, 14);
-        Font fonteTitulo = new Font("SansSerif", Font.BOLD, 14);
+        defaultFont = new Font("SansSerif", Font.PLAIN, 14);
+        boldFont = new Font("SansSerif", Font.BOLD, 14);
+        titleFont = new Font("SansSerif", Font.BOLD, 14);
 
         // =================================================================
         // PAINEL SUPERIOR: Passo 1 (Carregar)
         // =================================================================
-        JPanel pTopo = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
-        pTopo.setBorder(BorderFactory.createTitledBorder(null, "Passo 1: Carregar Modelo",
-                javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION,
-                javax.swing.border.TitledBorder.DEFAULT_POSITION, fonteTitulo));
+        topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        updateStep1Border(COLOR_YELLOW); // Começa amarelo
 
-        btnCarregar = new JButton("Carregar Rede (.bn)");
-        // Requisito: Texto a Preto
-        btnCarregar.setForeground(Color.BLACK);
-        btnCarregar.setBackground(new Color(220, 220, 220)); // Cinzento claro
-        btnCarregar.setFont(fonteBold);
+        loadButton = new JButton("Carregar Rede (.bn)");
+        loadButton.setForeground(Color.BLACK);
+        loadButton.setBackground(new Color(220, 220, 220));
+        loadButton.setFont(boldFont);
         
-        pTopo.add(btnCarregar);
+        loadedFileLabel = new JLabel("Nenhum ficheiro carregado");
+        loadedFileLabel.setFont(defaultFont);
+        loadedFileLabel.setForeground(Color.GRAY);
+        
+        topPanel.add(loadButton);
+        topPanel.add(loadedFileLabel);
 
         // =================================================================
         // PAINEL CENTRAL: Passo 2 (Inputs)
         // =================================================================
-        // Usamos um painel 'wrapper' para colocar os inputs no topo
-        JPanel pCentroWrapper = new JPanel(new BorderLayout());
-        pCentroWrapper.setBorder(BorderFactory.createTitledBorder(null, "Passo 2: Atributos do Paciente",
-                javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION,
-                javax.swing.border.TitledBorder.DEFAULT_POSITION, fonteTitulo));
+        centerWrapperPanel = new JPanel(new BorderLayout());
+        updateStep2Border(COLOR_WHITE); // Começa branco
         
-        painelInputs = new JPanel(new GridLayout(0, 4, 10, 10)); // Grid dinâmico
+        inputsPanel = new JPanel(new GridLayout(0, 4, 10, 10));
         
         // Wrapper para alinhar à esquerda
-        JPanel wrapperEsquerda = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        wrapperEsquerda.add(painelInputs);
+        JPanel leftWrapper = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        leftWrapper.add(inputsPanel);
         
-        // Botão Classificar (Fica junto aos inputs pois depende deles)
-        JPanel pBotoesAcao = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        btnClassificar = new JButton("Classificar Paciente");
-        // Requisito: Texto a Preto
-        btnClassificar.setForeground(Color.BLACK);
-        btnClassificar.setBackground(new Color(144, 238, 144)); // Verde Claro
-        btnClassificar.setFont(fonteBold);
-        btnClassificar.setEnabled(false); // Só ativa depois de carregar a rede
-        
-        pBotoesAcao.add(btnClassificar);
-
-        pCentroWrapper.add(new JScrollPane(wrapperEsquerda), BorderLayout.CENTER);
-        pCentroWrapper.add(pBotoesAcao, BorderLayout.SOUTH);
+        centerWrapperPanel.add(new JScrollPane(leftWrapper), BorderLayout.CENTER);
 
         // =================================================================
-        // PAINEL INFERIOR: Passo 3 (Resultados/Log)
+        // PAINEL INFERIOR: Log + Botões
         // =================================================================
-        areaLog = new JTextArea(12, 40); 
-        areaLog.setEditable(false);
-        areaLog.setFont(new Font("Consolas", Font.PLAIN, 14));
-        JScrollPane scrollLog = new JScrollPane(areaLog);
-        scrollLog.setBorder(BorderFactory.createTitledBorder(null, "Passo 3: Resultados e Log",
-                javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION,
-                javax.swing.border.TitledBorder.DEFAULT_POSITION, fonteTitulo));
+        JPanel bottomPanel = new JPanel(new BorderLayout(5, 5));
+        
+        // Área de Log com fundo azul bebé
+        logArea = new JTextArea(10, 40); 
+        logArea.setEditable(false);
+        logArea.setFont(new Font("Consolas", Font.PLAIN, 14));
+        logArea.setBackground(new Color(230, 245, 255)); // Azul muito claro
+        JScrollPane logScrollPane = new JScrollPane(logArea);
+        logScrollPane.setBorder(BorderFactory.createTitledBorder(null, "Resultados e Log",
+                TitledBorder.DEFAULT_JUSTIFICATION,
+                TitledBorder.DEFAULT_POSITION, titleFont));
+        
+        // Painel de botões (abaixo do log)
+        JPanel actionButtonsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
+        
+        // Botão Limpar Dados
+        clearDataButton = new JButton("Limpar Dados");
+        clearDataButton.setForeground(Color.BLACK);
+        clearDataButton.setBackground(Color.WHITE);
+        clearDataButton.setFont(boldFont);
+        clearDataButton.setEnabled(false);
+        
+        // Botão Mudar Ficheiro
+        changeFileButton = new JButton("Mudar Ficheiro");
+        changeFileButton.setForeground(Color.BLACK);
+        changeFileButton.setBackground(Color.WHITE);
+        changeFileButton.setFont(boldFont);
+        changeFileButton.setEnabled(false);
+        
+        // Botão Classificar
+        classifyButton = new JButton("Classificar");
+        classifyButton.setForeground(Color.BLACK);
+        classifyButton.setBackground(Color.WHITE);
+        classifyButton.setFont(boldFont);
+        classifyButton.setEnabled(false);
+        
+        actionButtonsPanel.add(clearDataButton);
+        actionButtonsPanel.add(changeFileButton);
+        actionButtonsPanel.add(classifyButton);
+        
+        bottomPanel.add(logScrollPane, BorderLayout.CENTER);
+        bottomPanel.add(actionButtonsPanel, BorderLayout.SOUTH);
 
         // Adicionar tudo à Janela Principal
-        add(pTopo, BorderLayout.NORTH);
-        add(pCentroWrapper, BorderLayout.CENTER);
-        add(scrollLog, BorderLayout.SOUTH);
+        add(topPanel, BorderLayout.NORTH);
+        add(centerWrapperPanel, BorderLayout.CENTER);
+        add(bottomPanel, BorderLayout.SOUTH);
 
         // Ações (Listeners)
-        btnCarregar.addActionListener(e -> carregar());
-        btnClassificar.addActionListener(e -> classificar());
+        loadButton.addActionListener(e -> load());
+        classifyButton.addActionListener(e -> classifyy());
+        changeFileButton.addActionListener(e -> changeFile());
+        clearDataButton.addActionListener(e -> clearData());
         
         log("Bem-vindo à Aplicação de Classificação.");
         log("Por favor, clique em 'Carregar Rede' para escolher o ficheiro bn. pretendido.");
     }
+    
+    // ====================== MÉTODOS DE ATUALIZAÇÃO DE BORDAS ======================
+    
+    private void updateStep1Border(Color color) {
+        topPanel.setBorder(BorderFactory.createTitledBorder(
+                BorderFactory.createLineBorder(color, 3),
+                "Carregar Modelo",
+                TitledBorder.DEFAULT_JUSTIFICATION,
+                TitledBorder.DEFAULT_POSITION, 
+                titleFont,
+                color));
+    }
+    
+    private void updateStep2Border(Color color) {
+        centerWrapperPanel.setBorder(BorderFactory.createTitledBorder(
+                BorderFactory.createLineBorder(color, 3),
+                "Atributos",
+                TitledBorder.DEFAULT_JUSTIFICATION,
+                TitledBorder.DEFAULT_POSITION, 
+                titleFont,
+                color.equals(COLOR_WHITE) ? Color.BLACK : color));
+    }
 
-    private void carregar() {
-        // O utilizador decide quando abre o ficheiro
+    // ====================== AÇÕES DOS BOTÕES ======================
+
+    private void load() {
         JFileChooser fc = new JFileChooser(".");
         if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(fc.getSelectedFile()))) {
                 
-                redeCarregada = (BN) ois.readObject();
+                loadedNetwork = (BN) ois.readObject();
                 
                 log("\n>>> Rede carregada: " + fc.getSelectedFile().getName());
                 
-                // Gera os campos assim que a rede é carregada
-                gerarCamposInput();
+                // Sucesso: Passo 1 fica verde, Passo 2 fica amarelo
+                updateStep1Border(COLOR_GREEN);
+                updateStep2Border(COLOR_YELLOW);
                 
-                btnClassificar.setEnabled(true);
-                log(">>> Por favor, preencha os atributos do paciente e depois clique em 'Classificar'.");
+                // Atualizar label com nome do ficheiro
+                loadedFileLabel.setText("Ficheiro: " + fc.getSelectedFile().getName());
+                loadedFileLabel.setForeground(COLOR_GREEN);
+                
+                // Gera os campos assim que a rede é carregada
+                generateInputFields();
+                
+                // Ativar botões
+                classifyButton.setEnabled(true);
+                changeFileButton.setEnabled(true);
+                clearDataButton.setEnabled(true);
+                
+                log(">>> Por favor, preencha os atributos e depois clique em 'Classificar'.");
                 
             } catch (Exception ex) {
+                // Erro: Passo 1 fica vermelho
+                updateStep1Border(COLOR_RED);
+                loadedFileLabel.setText("Erro ao carregar ficheiro!");
+                loadedFileLabel.setForeground(COLOR_RED);
                 log("ERRO ao carregar: " + ex.getMessage());
                 ex.printStackTrace();
             }
         }
     }
-
-    private void gerarCamposInput() {
-        painelInputs.removeAll();
-        inputsManuais.clear();
+    
+    private void changeFile() {
+        // Voltar ao estado inicial
+        loadedNetwork = null;
         
-        Font fontePadrao = new Font("SansSerif", Font.PLAIN, 14);
-        int nVars = redeCarregada.getDim(); 
-        int numAtributos = nVars - 1; // Excluindo a classe
+        // Limpar campos
+        inputsPanel.removeAll();
+        manualInputs.clear();
+        inputsPanel.revalidate();
+        inputsPanel.repaint();
         
-        // Calcular número de colunas dinamicamente
-        // Cada par label+campo ocupa 2 colunas no grid
-        int pares;
-        if (numAtributos <= 5) {
-            pares = 2;  // 4 colunas (2 pares)
-        } else if (numAtributos <= 10) {
-            pares = 3;  // 6 colunas (3 pares)
-        } else if (numAtributos <= 20) {
-            pares = 4;  // 8 colunas (4 pares)
-        } else {
-            pares = 5;  // 10 colunas (5 pares) para muitas variáveis
+        // Desativar botões
+        classifyButton.setEnabled(false);
+        changeFileButton.setEnabled(false);
+        clearDataButton.setEnabled(false);
+        
+        // Restaurar cores: Passo 1 amarelo, Passo 2 branco
+        updateStep1Border(COLOR_YELLOW);
+        updateStep2Border(COLOR_WHITE);
+        
+        // Restaurar label
+        loadedFileLabel.setText("Nenhum ficheiro carregado");
+        loadedFileLabel.setForeground(Color.GRAY);
+        
+        log("\n>>> Ficheiro desmarcado. Por favor, carregue um novo ficheiro .bn");
+    }
+    
+    private void clearData() {
+        // Limpar todos os campos de input
+        for (JTextField tf : manualInputs) {
+            tf.setText("0");
         }
         
-        painelInputs.setLayout(new GridLayout(0, pares * 2, 10, 10));
+        // Passo 2 volta a amarelo
+        updateStep2Border(COLOR_YELLOW);
         
-        // O último atributo é a classe, ignoramos no input
-        for (int i = 0; i < numAtributos; i++) {
-            int maxVal = redeCarregada.getDomain(i) - 1; 
+        log(">>> Atributos limpos. Por favor, preencha novamente.");
+    }
+
+    private void generateInputFields() {
+        inputsPanel.removeAll();
+        manualInputs.clear();
+        
+        int totalVars = loadedNetwork.getDim(); 
+        int numAttributes = totalVars - 1; // Excluindo a classe
+        
+        // Calcular número de colunas dinamicamente
+        int pairs;
+        if (numAttributes <= 5) {
+            pairs = 2;  // 4 colunas (2 pares)
+        } else if (numAttributes <= 10) {
+            pairs = 3;  // 6 colunas (3 pares)
+        } else if (numAttributes <= 20) {
+            pairs = 4;  // 8 colunas (4 pares)
+        } else {
+            pairs = 5;  // 10 colunas (5 pares) para muitas variáveis
+        }
+        
+        inputsPanel.setLayout(new GridLayout(0, pairs * 2, 10, 10));
+        
+        for (int i = 0; i < numAttributes; i++) {
+            int maxVal = loadedNetwork.getDomain(i) - 1; 
             
             JLabel lbl = new JLabel("Var " + i + " [0-" + maxVal + "]:");
             lbl.setHorizontalAlignment(SwingConstants.RIGHT);
-            lbl.setFont(fontePadrao);
+            lbl.setFont(defaultFont);
             
             JTextField tf = new JTextField("0", 3);
             tf.setHorizontalAlignment(SwingConstants.CENTER);
-            tf.setFont(fontePadrao);
+            tf.setFont(defaultFont);
             
-            inputsManuais.add(tf);
-            painelInputs.add(lbl);
-            painelInputs.add(tf);
+            manualInputs.add(tf);
+            inputsPanel.add(lbl);
+            inputsPanel.add(tf);
         }
         
-        painelInputs.revalidate();
-        painelInputs.repaint();
+        inputsPanel.revalidate();
+        inputsPanel.repaint();
         
-        // Também re-validar o wrapper pai
-        painelInputs.getParent().revalidate();
-        painelInputs.getParent().repaint();
+        if (inputsPanel.getParent() != null) {
+            inputsPanel.getParent().revalidate();
+            inputsPanel.getParent().repaint();
+        }
     }
 
-    private void classificar() {
+    private void classifyy() {
         try {
-            int nTotal = redeCarregada.getDim();
-            int[] dados = new int[nTotal];
+            int totalVars = loadedNetwork.getDim();
+            int[] data = new int[totalVars];
+            boolean hasError = false;
+            
+            // Primeiro, resetar todas as cores para preto
+            for (JTextField tf : manualInputs) {
+                tf.setForeground(Color.BLACK);
+            }
             
             // Ler valores das caixas de texto
-            for (int i = 0; i < inputsManuais.size(); i++) {
-                String texto = inputsManuais.get(i).getText().trim();
+            for (int i = 0; i < manualInputs.size(); i++) {
+                JTextField tf = manualInputs.get(i);
+                String text = tf.getText().trim();
                 
                 // Validação básica
-                if(texto.isEmpty()) {
-                    JOptionPane.showMessageDialog(this, "Preencha todos os campos.");
-                    return;
+                if(text.isEmpty()) {
+                    tf.setForeground(COLOR_RED);
+                    hasError = true;
+                    continue;
                 }
                 
-                int val = Integer.parseInt(texto);
-                int max = redeCarregada.getDomain(i) - 1;
-                
-                if (val < 0 || val > max) {
-                    JOptionPane.showMessageDialog(this, "Erro na Var " + i + ": Valor deve estar entre 0 e " + max);
-                    return;
+                try {
+                    int val = Integer.parseInt(text);
+                    int max = loadedNetwork.getDomain(i) - 1;
+                    
+                    if (val < 0 || val > max) {
+                        tf.setForeground(COLOR_RED);
+                        hasError = true;
+                    } else {
+                        data[i] = val;
+                    }
+                } catch (NumberFormatException ex) {
+                    tf.setForeground(COLOR_RED);
+                    hasError = true;
                 }
-                dados[i] = val;
             }
             
-            dados[nTotal - 1] = 0; // Placeholder para a classe
+            if (hasError) {
+                updateStep2Border(COLOR_RED);
+                JOptionPane.showMessageDialog(this, "Corrija os campos assinalados a vermelho.");
+                return;
+            }
+            
+            data[totalVars - 1] = 0; // Placeholder para a classe
             
             // Classificar
-            int resultado = redeCarregada.classificar(dados);
+            int result = loadedNetwork.classify(data);
             
-         // Calcular probabilidade
-            dados[nTotal - 1] = resultado;
-            double prob = redeCarregada.prob(dados);
+            // Calcular probabilidade
+            data[totalVars - 1] = result;
+            double prob = loadedNetwork.prob(data);
             
-            // --- CORREÇÃO DE VISUALIZAÇÃO ---
-            // 1. Criar uma string com o formato correto
-            String textoProbabilidade;
-            
+            // Formatação da probabilidade
+            String probabilityText;
             if (prob < 0.0001) {
-                // Se for muito pequeno (ex: 1.45e-18), usa Notação Científica
-                textoProbabilidade = String.format("%.4e", prob);
+                probabilityText = String.format("%.4e", prob);
             } else {
-                // Se for razoável (ex: 0.19), usa Percentagem
-                textoProbabilidade = String.format("%.4f%%", prob * 100);
+                probabilityText = String.format("%.4f%%", prob * 100);
             }
             
-            // 2. Apresentar resultado final (Usando a string formatada)
+            // Sucesso: Passo 2 fica verde
+            updateStep2Border(COLOR_GREEN);
+            
+            // Apresentar resultado
             log("--------------------------------------------------");
-            log("Entrada: " + Arrays.toString(Arrays.copyOf(dados, nTotal - 1)));
-            log("PREVISÃO: CLASSE " + resultado);
-            log("Probabilidade Conjunta (P): " + textoProbabilidade);
+            log("Entrada: " + Arrays.toString(Arrays.copyOf(data, totalVars - 1)));
+            log("PREVISÃO: CLASSE " + result);
+            log("Probabilidade Conjunta (P): " + probabilityText);
             log("--------------------------------------------------");
             
-        } catch (NumberFormatException ex) {
-            JOptionPane.showMessageDialog(this, "Por favor insira apenas números inteiros.");
         } catch (Exception ex) {
             log("Erro na classificação: " + ex.getMessage());
         }
     }
     
     private void log(String s) { 
-        areaLog.append(s + "\n"); 
-        areaLog.setCaretPosition(areaLog.getDocument().getLength());
+        logArea.append(s + "\n"); 
+        logArea.setCaretPosition(logArea.getDocument().getLength());
     }
 
     public static void main(String[] args) {

@@ -7,160 +7,178 @@ import java.io.ObjectOutputStream;
 import java.util.LinkedList;
 import java.util.Random;
 
-/**
- * Aplicação 1: Aprendizagem da Rede Bayesiana
- * Adaptação: O algoritmo de aprendizagem está implementado AQUI 
- * para não alterar a classe Graphoo.
- */
+
+//Aplicação 1: Lê a amostra, aprende a rede e grava-a
+
+
 public class App1_Aprendizagem extends JFrame {
 
     private static final long serialVersionUID = 1L;
 
-    private JComboBox<String> comboDatasets;
-    private JTextField campoK, campoRestarts;
-    private JTextArea areaLog;
-    private JButton btnAprender;
-    private JProgressBar barraProgresso;
+    private JComboBox<String> datasetCombo;
+    private JTextField kField, restartsField;
+    private JTextArea logArea;
+    private JButton learnButton;
+    private JProgressBar progressBar;
+    private JPanel configPanel;
+    
+    // Cores para os estados
+    private static final Color COLOR_YELLOW = new Color(255, 200, 0);
+    private static final Color COLOR_GREEN = new Color(0, 180, 0);
+    private static final Color COLOR_RED = new Color(200, 0, 0);
 
     private final String[] datasets = {
-            "bcancer.csv", "diabetes.csv", "hepatitis.csv",
-            "parkisons.csv", "thyroid.csv", "soybean-large.csv", "satimage.csv", "letter.csv"
+            "bcancer.csv", "diabetes.csv", "hepatitis.csv"
+            , "thyroid.csv", "soybean-large.csv", "satimage.csv", "letter.csv"
     };
 
     public App1_Aprendizagem() {
-        setTitle("Aplicação 1 - Aprendizagem (Lógica Externa)");
+        setTitle("Aplicação 1 - Aprendizagem");
         setSize(750, 600);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(10, 10));
 
-        // Painel de configuração (sem o botão)
-        JPanel painelConfig = new JPanel(new GridLayout(3, 2, 10, 10));
-        painelConfig.setBorder(BorderFactory.createTitledBorder(null, "Configuração", 
-                javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION, 
-                javax.swing.border.TitledBorder.DEFAULT_POSITION, 
-                new Font("SansSerif", Font.BOLD, 14)));
-
         // Fonte maior para labels e campos
-        Font fonteMaior = new Font("SansSerif", Font.PLAIN, 14);
+        Font largerFont = new Font("SansSerif", Font.PLAIN, 14);
+        Font titleFont = new Font("SansSerif", Font.BOLD, 14);
+
+        // Painel de configuração (sem o botão)
+        configPanel = new JPanel(new GridLayout(3, 2, 10, 10));
+        updateConfigBorder(COLOR_YELLOW); // Começa amarelo
         
-        JLabel lblDataset = new JLabel("Dataset:");
-        lblDataset.setFont(fonteMaior);
-        painelConfig.add(lblDataset);
-        comboDatasets = new JComboBox<>(datasets);
-        comboDatasets.setFont(fonteMaior);
-        painelConfig.add(comboDatasets);
+        JLabel datasetLabel = new JLabel("Dataset:");
+        datasetLabel.setFont(largerFont);
+        configPanel.add(datasetLabel);
+        datasetCombo = new JComboBox<>(datasets);
+        datasetCombo.setFont(largerFont);
+        configPanel.add(datasetCombo);
 
-        JLabel lblK = new JLabel("Máximo de pais atributos (k):");
-        lblK.setFont(fonteMaior);
-        painelConfig.add(lblK);
-        campoK = new JTextField("2", 5);
-        campoK.setFont(fonteMaior);
-        painelConfig.add(campoK);
+        JLabel kLabel = new JLabel("Máximo de pais atributos (k):");
+        kLabel.setFont(largerFont);
+        configPanel.add(kLabel);
+        kField = new JTextField("2", 5);
+        kField.setFont(largerFont);
+        configPanel.add(kField);
 
-        JLabel lblRestarts = new JLabel("Número de restarts aleatórios:");
-        lblRestarts.setFont(fonteMaior);
-        painelConfig.add(lblRestarts);
-        campoRestarts = new JTextField("10", 5);
-        campoRestarts.setFont(fonteMaior);
-        painelConfig.add(campoRestarts);
+        JLabel restartsLabel = new JLabel("Número de restarts aleatórios:");
+        restartsLabel.setFont(largerFont);
+        configPanel.add(restartsLabel);
+        restartsField = new JTextField("10", 5);
+        restartsField.setFont(largerFont);
+        configPanel.add(restartsField);
 
-        // Área de Log (centro)
-        areaLog = new JTextArea();
-        areaLog.setEditable(false);
-        areaLog.setFont(new Font("Consolas", Font.PLAIN, 14));
-        JScrollPane scrollLog = new JScrollPane(areaLog);
-        scrollLog.setBorder(BorderFactory.createTitledBorder("Log da Execução"));
+        // Área de Log
+        logArea = new JTextArea();
+        logArea.setEditable(false);
+        logArea.setFont(new Font("Consolas", Font.PLAIN, 14));
+        logArea.setBackground(new Color(230, 245, 255)); // Azul muito claro
+        JScrollPane logScrollPane = new JScrollPane(logArea);
+        logScrollPane.setBorder(BorderFactory.createTitledBorder(null, "Log da Execução",
+                javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION,
+                javax.swing.border.TitledBorder.DEFAULT_POSITION, titleFont));
 
         // Painel inferior com barra de progresso e botão
-        JPanel painelInferior = new JPanel(new BorderLayout(10, 10));
-        painelInferior.setBorder(BorderFactory.createEmptyBorder(5, 10, 10, 10));
+        JPanel bottomPanel = new JPanel(new BorderLayout(10, 10));
+        bottomPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 10, 10));
 
-        barraProgresso = new JProgressBar(0, 100);
-        barraProgresso.setStringPainted(true);
-        barraProgresso.setString("Pronto");
-        barraProgresso.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        progressBar = new JProgressBar(0, 100);
+        progressBar.setStringPainted(true);
+        progressBar.setString("Pronto");
+        progressBar.setFont(new Font("SansSerif", Font.PLAIN, 14));
         
-        btnAprender = new JButton("Aprender e Gravar Rede (.bn)");
-        btnAprender.setBackground(new Color(0, 128, 0));
-        btnAprender.setForeground(Color.BLACK); // Letra preta
-        btnAprender.setFont(new Font("SansSerif", Font.BOLD, 14));
+        learnButton = new JButton("Aprender e Gravar Rede (.bn)");
+        learnButton.setBackground(Color.WHITE);
+        learnButton.setForeground(Color.BLACK);
+        learnButton.setFont(new Font("SansSerif", Font.BOLD, 14));
 
-        painelInferior.add(barraProgresso, BorderLayout.CENTER);
-        painelInferior.add(btnAprender, BorderLayout.SOUTH);
+        bottomPanel.add(progressBar, BorderLayout.CENTER);
+        bottomPanel.add(learnButton, BorderLayout.SOUTH);
 
-        add(painelConfig, BorderLayout.NORTH);
-        add(scrollLog, BorderLayout.CENTER);
-        add(painelInferior, BorderLayout.SOUTH);
+        add(configPanel, BorderLayout.NORTH);
+        add(logScrollPane, BorderLayout.CENTER);
+        add(bottomPanel, BorderLayout.SOUTH);
 
-        btnAprender.addActionListener(e -> executarAprendizagem());
+        learnButton.addActionListener(e -> executeLearning());
         
-        log("Aplicação pronta. O algoritmo de aprendizagem correrá aqui localmente.");
+        log("Aplicação pronta! Selecione um Dataset e preencha os restantes campos.");
+    }
+    
+    private void updateConfigBorder(Color color) {
+        configPanel.setBorder(BorderFactory.createTitledBorder(
+                BorderFactory.createLineBorder(color, 3),
+                "Configuração",
+                javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION,
+                javax.swing.border.TitledBorder.DEFAULT_POSITION,
+                new Font("SansSerif", Font.BOLD, 14),
+                color));
     }
 
-    private void executarAprendizagem() {
-        new Thread(() -> {
+    private void executeLearning() {
+        new Thread(() -> { // Interface gráfica continua responsiva;
             try {
-                btnAprender.setEnabled(false);
-                atualizarProgresso(0, "A iniciar...");
+                learnButton.setEnabled(false);
+                SwingUtilities.invokeLater(() -> updateConfigBorder(COLOR_YELLOW));
+                updateProgress(0, "A iniciar...");
                 
-                String dataset = (String) comboDatasets.getSelectedItem();
+                String dataset = (String) datasetCombo.getSelectedItem();
                 
-                // Validação e Ajuste de K
-                int kInput = Integer.parseInt(campoK.getText().trim());
-                int k = kInput;
-                if (k > 2) {
+                // Validação e Ajuste de K (pode ser 0, 1 ou 2)
+                int k = Integer.parseInt(kField.getText().trim());
+                if (k < 0 || k > 2) {
                     k = 2;
-                    SwingUtilities.invokeLater(() -> campoK.setText("2")); 
-                    log(">>> AVISO: K ajustado para 2 (Limite teórico).");
+                    SwingUtilities.invokeLater(() -> kField.setText("2")); 
+                    log(">>> AVISO: K ajustado para 2 (deve ser 0, 1 ou 2).");
                 }
 
-                int restarts = Integer.parseInt(campoRestarts.getText().trim());
-                if (k < 0 || restarts < 1) throw new IllegalArgumentException("Parâmetros inválidos.");
+                int restarts = Integer.parseInt(restartsField.getText().trim());
+                if (restarts < 1) throw new IllegalArgumentException("Parâmetros inválidos.");
 
-                atualizarProgresso(10, "A carregar dados...");
+                updateProgress(10, "A carregar dados...");
                 log("\n>>> A carregar dados: " + dataset);
-                Amostra amostra = new Amostra(dataset);
-                log(">>> Dados carregados. Dimensões: " + amostra.length() + " x " + amostra.dim());
+                Amostra sample = new Amostra(dataset);
+                log(">>> Dados carregados. Dimensões: " + sample.length() + " x " + sample.dim());
 
-                atualizarProgresso(20, "A criar grafo...");
+                updateProgress(20, "A criar grafo...");
                 // 1. Criar grafo vazio
-                Graphoo grafo = new Graphoo(amostra.dim());
+                Graphoo graph = new Graphoo(sample.dim());
                 
                 // 2. Executar o algoritmo de aprendizagem EXTERNO
-                atualizarProgresso(30, "A executar Hill Climbing...");
+                updateProgress(30, "A executar Hill Climbing...");
                 log(">>> A executar Hill Climbing com " + restarts + " restarts...");
-                aprenderExternamente(grafo, amostra, k, restarts);
+                learn(graph, sample, k, restarts);
 
-                atualizarProgresso(80, "A calcular score final...");
-                log(">>> Score MDL Final: " + String.format("%.4f", grafo.MDL(amostra)));
+                updateProgress(80, "A calcular score final...");
+                log(">>> Score MDL Final: " + String.format("%.4f", graph.MDL(sample)));
                 log(">>> Construindo BN e gravando...");
                 
-                atualizarProgresso(90, "A gravar ficheiro...");
-                BN rede = new BN(grafo, amostra, 0.5);
+                updateProgress(90, "A gravar ficheiro...");
+                BN network = new BN(graph, sample, 0.5);
 
-                String ficheiroBn = dataset.replace(".csv", ".bn");
-                try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(ficheiroBn))) {
-                    oos.writeObject(rede);
+                String bnFileName = dataset.replace(".csv", ".bn");
+                try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(bnFileName))) {
+                    oos.writeObject(network);
                 }
 
-                atualizarProgresso(100, "Concluído!");
-                log(">>> SUCESSO! Ficheiro criado: " + ficheiroBn);
+                updateProgress(100, "Concluído!");
+                SwingUtilities.invokeLater(() -> updateConfigBorder(COLOR_GREEN));
+                log(">>> SUCESSO! Ficheiro criado: " + bnFileName);
 
             } catch (Exception ex) {
-                atualizarProgresso(0, "Erro!");
+                updateProgress(0, "Erro!");
+                SwingUtilities.invokeLater(() -> updateConfigBorder(COLOR_RED));
                 log("ERRO: " + ex.getMessage());
                 ex.printStackTrace();
             } finally {
-                btnAprender.setEnabled(true);
+                learnButton.setEnabled(true);
             }
         }).start();
     }
     
-    private void atualizarProgresso(int valor, String texto) {
+    private void updateProgress(int value, String text) {
         SwingUtilities.invokeLater(() -> {
-            barraProgresso.setValue(valor);
-            barraProgresso.setString(texto);
+            progressBar.setValue(value);
+            progressBar.setString(text);
         });
     }
 
@@ -168,43 +186,44 @@ public class App1_Aprendizagem extends JFrame {
     //        ALGORITMO DE APRENDIZAGEM (FORA DA GRAPHOO)
     // =========================================================================
 
-    private void aprenderExternamente(Graphoo g, Amostra T, int k, int numStarts) {
+    private void learn(Graphoo g, Amostra T, int k, int numStarts) {
         int n = T.dim();
-        int classe = n - 1;
+        int classIndex = n - 1;
 
         // 1. Configurar Grafo Base (Classe é pai de todos)
-        for (int i = 0; i < classe; i++) {
-            g.add_edge(classe, i);
+        for (int i = 0; i < classIndex; i++) {
+            g.add_edge(classIndex, i);
         }
 
         // Variáveis para guardar o melhor resultado
-        Graphoo melhorGrafo = new Graphoo(g); // Usa o construtor de cópia
-        double melhorScore = melhorGrafo.MDL(T);
+        Graphoo bestGraph = new Graphoo(g); // Usa o construtor de cópia
+        double bestScore = bestGraph.MDL(T);
 
         // 2. Random Restarts (com progresso de 30% a 80%)
         for (int s = 0; s < numStarts; s++) {
+
             // Calcular progresso: de 30% a 80% baseado no número de restarts
-            int progresso = 30 + (int)((s + 1) * 50.0 / numStarts);
-            atualizarProgresso(progresso, "Restart " + (s + 1) + "/" + numStarts);
+            int progress = 30 + (int)((s + 1) * 50.0 / numStarts);
+            updateProgress(progress, "Restart " + (s + 1) + "/" + numStarts);
             
-            Graphoo candidato;
+            Graphoo candidate;
             if (s == 0) {
                 // Primeira tentativa: começa do grafo base (vazio + classe)
-                candidato = new Graphoo(g);
+                candidate = new Graphoo(g);
             } else {
                 // Outras tentativas: começa de grafo aleatório
-                candidato = gerarGrafoAleatorio(n, k, classe);
+                candidate = generateRandomGraph(n, k, classIndex);
             }
 
             // Executar Hill Climbing neste candidato
-            executarHillClimbing(candidato, T, k);
+            executeHillClimbing(candidate, T, k);
 
             // Verificar se é o melhor
-            double scoreAtual = candidato.MDL(T);
-            if (scoreAtual > melhorScore) {
-                melhorScore = scoreAtual;
-                melhorGrafo = new Graphoo(candidato); // Guardar cópia do vencedor
-                log("   > Novo melhor score encontrado: " + String.format("%.2f", melhorScore));
+            double currentScore = candidate.MDL(T);
+            if (currentScore > bestScore) {
+                bestScore = currentScore;
+                bestGraph = new Graphoo(candidate); // Guardar cópia do vencedor
+                log("   > Novo melhor score encontrado: " + String.format("%.2f", bestScore));
             }
         }
 
@@ -217,38 +236,39 @@ public class App1_Aprendizagem extends JFrame {
         // 1. Removemos todas as arestas existentes em G
         for(int i=0; i<n; i++) {
             // Copiar lista para evitar ConcurrentModificationException
-            LinkedList<Integer> pais = new LinkedList<>(g.parents(i));
-            for(Integer p : pais) g.remove_edge(p, i);
+            LinkedList<Integer> parents = new LinkedList<>(g.parents(i));
+            for(Integer p : parents) g.remove_edge(p, i);
         }
         
         // 2. Adicionamos as arestas do melhorGrafo
         for(int i=0; i<n; i++) {
             // parents() retorna quem aponta para i. add_edge(pai, filho)
-            for(Integer pai : melhorGrafo.parents(i)) {
-                g.add_edge(pai, i);
+            for(Integer parent : bestGraph.parents(i)) {
+                g.add_edge(parent, i);
             }
         }
     }
 
-    private Graphoo gerarGrafoAleatorio(int n, int k, int classe) {
+    // Cria grafos aleatórios obrigatóriamente acíclicos
+    private Graphoo generateRandomGraph(int n, int k, int classIndex) {
         Graphoo g = new Graphoo(n);
-        // Adicionar arestas fixas da classe
-        for (int i = 0; i < classe; i++) g.add_edge(classe, i);
+        // Adicionar arestas da classe aos Xi's
+        for (int i = 0; i < classIndex; i++) g.add_edge(classIndex, i);
 
         Random rand = new Random();
-        int tentativas = n * k; // Tenta adicionar algumas arestas extra
+        int attempts = n * k; // Define quantas tentativas de adicionar arestas aleatórias
 
-        for (int t = 0; t < tentativas; t++) {
-            int u = rand.nextInt(classe); // Pai (atributo)
-            int v = rand.nextInt(classe); // Filho (atributo)
+        for (int t = 0; t < attempts; t++) {
+            int u = rand.nextInt(classIndex); // Pai (atributo)
+            int v = rand.nextInt(classIndex); // Filho (atributo)
 
             if (u != v) {
                 // Verifica se já existe
                 if (!g.parents(v).contains(u)) {
-                    // Verifica limite K (lembrando que parents() inclui a classe)
-                    if (g.parents(v).size() < k + 1) { // +1 da classe
+                    // Verifica limite de pais (lembrando que parents() inclui a classe)
+                    if (g.parents(v).size() < k + 1) { // k atributos + 1 classe
                         // Verifica ciclo
-                        if (!g.connected(v, u)) {
+                        if (!g.connected(v, u)) { // Impede a criação de ciclos
                             g.add_edge(u, v);
                         }
                     }
@@ -258,46 +278,46 @@ public class App1_Aprendizagem extends JFrame {
         return g;
     }
 
-    private void executarHillClimbing(Graphoo g, Amostra T, int k) {
+    private void executeHillClimbing(Graphoo g, Amostra T, int k) {
         int n = T.dim();
-        int classe = n - 1;
-        int maxParents = k + 1; // Atributos + Classe
-        boolean melhorou = true;
+        int classIndex = n - 1;
+        int maxParents = k + 1; // k + classe
+        boolean improved = true;
 
-        while (melhorou) {
-            melhorou = false;
-            double melhorDelta = 0.0001;
+        while (improved) {
+            improved = false;
+            double bestDelta = 0.0001; // Limiar mínimo de melhoria para aceitar uma operação no Hill Climbing
             int op = -1, bestU = -1, bestV = -1;
 
             // Testar todas as arestas possíveis
             for (int u = 0; u < n; u++) {
                 for (int v = 0; v < n; v++) {
                     // Ignorar arestas da classe ou para a classe
-                    if (u == v || u == classe || v == classe) continue;
+                    if (u == v || u == classIndex || v == classIndex) continue;
 
-                    boolean existe = g.parents(v).contains(u);
+                    boolean exists = g.parents(v).contains(u);
 
-                    if (!existe) {
-                        // Tentar ADICIONAR (2)
+                    if (!exists) {
+                        // Tentar ADICIONAR (op2)
                         if (g.parents(v).size() < maxParents && !g.connected(v, u)) {
                             double delta = g.MDLdelta(T, u, v, 2);
-                            if (delta > melhorDelta) {
-                                melhorDelta = delta; op = 2; bestU = u; bestV = v;
+                            if (delta > bestDelta) {
+                                bestDelta = delta; op = 2; bestU = u; bestV = v;
                             }
                         }
                     } else {
-                        // Tentar REMOVER (0)
+                        // Tentar REMOVER (op0)
                         double deltaRem = g.MDLdelta(T, u, v, 0);
-                        if (deltaRem > melhorDelta) {
-                            melhorDelta = deltaRem; op = 0; bestU = u; bestV = v;
+                        if (deltaRem > bestDelta) {
+                            bestDelta = deltaRem; op = 0; bestU = u; bestV = v;
                         }
 
-                        // Tentar INVERTER (1)
-                        // Verifica se 'u' tem espaço para receber 'v' como pai
+                        // Tentar INVERTER (op1)
+                        // Verifica se u pode receber v como pai sem criar ciclos
                         if (g.parents(u).size() < maxParents && !g.connected(u, v)) {
                             double deltaInv = g.MDLdelta(T, u, v, 1);
-                            if (deltaInv > melhorDelta) {
-                                melhorDelta = deltaInv; op = 1; bestU = u; bestV = v;
+                            if (deltaInv > bestDelta) {
+                                bestDelta = deltaInv; op = 1; bestU = u; bestV = v;
                             }
                         }
                     }
@@ -306,7 +326,7 @@ public class App1_Aprendizagem extends JFrame {
 
             // Aplicar melhor operação
             if (op != -1) {
-                melhorou = true;
+                improved = true;
                 if (op == 0) g.remove_edge(bestU, bestV);
                 else if (op == 1) g.invert_edge(bestU, bestV);
                 else if (op == 2) g.add_edge(bestU, bestV);
@@ -316,8 +336,8 @@ public class App1_Aprendizagem extends JFrame {
 
     private void log(String msg) {
         SwingUtilities.invokeLater(() -> {
-            areaLog.append(msg + "\n");
-            areaLog.setCaretPosition(areaLog.getDocument().getLength());
+            logArea.append(msg + "\n");
+            logArea.setCaretPosition(logArea.getDocument().getLength());
         });
     }
 
